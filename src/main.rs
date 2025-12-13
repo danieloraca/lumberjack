@@ -12,7 +12,8 @@ use ratatui::{
     text::Line,
     widgets::{Block, Gauge, Widget},
 };
-use std::{env, io, sync::mpsc, thread, time::Duration};
+use std::time::{Duration, Instant};
+use std::{env, io, sync::mpsc, thread};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Focus {
@@ -63,6 +64,8 @@ fn main() -> io::Result<()> {
         filter_query: String::new(),
         filter_field: FilterField::Query,
         editing: false,
+        cursor_on: true,
+        last_blink: Instant::now(),
     };
 
     let app_result = app.run(&mut terminal);
@@ -86,11 +89,23 @@ pub struct App {
     filter_query: String,
     filter_field: FilterField,
     editing: bool,
+    cursor_on: bool,
+    last_blink: Instant,
 }
 
 impl App {
     fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
+            if self.focus == Focus::Filter && self.editing {
+                if self.last_blink.elapsed() >= Duration::from_millis(500) {
+                    self.cursor_on = !self.cursor_on;
+                    self.last_blink = Instant::now();
+                }
+            } else {
+                self.cursor_on = true;
+                self.last_blink = Instant::now();
+            }
+
             terminal.draw(|frame| self.draw(frame))?;
 
             if event::poll(Duration::from_millis(50))? {
@@ -235,6 +250,15 @@ impl App {
             "SEARCH group={} start={} end={} query={}",
             group, self.filter_start, self.filter_end, self.filter_query
         ));
+    }
+
+    fn active_field_len(&self) -> usize {
+        match self.filter_field {
+            FilterField::Start => self.filter_start.len(),
+            FilterField::End => self.filter_end.len(),
+            FilterField::Query => self.filter_query.len(),
+            FilterField::Search => 0,
+        }
     }
 }
 
@@ -440,6 +464,44 @@ impl Widget for &App {
                 buf,
             );
         row_y += 1;
+
+        // ---- fake blinking cursor inside the active filter field ----
+        if self.focus == Focus::Filter && self.editing && self.cursor_on {
+            // Which row is the active field on?
+            let field_row = match self.filter_field {
+                FilterField::Start => 0,
+                FilterField::End => 1,
+                FilterField::Query => 2,
+                FilterField::Search => 3, // no typing here; you can skip if you prefer
+            };
+
+            // Only show cursor for text fields
+            if self.filter_field != FilterField::Search {
+                let label = match self.filter_field {
+                    FilterField::Start => "Start: ",
+                    FilterField::End => "End: ",
+                    FilterField::Query => "Query: ",
+                    FilterField::Search => "",
+                };
+
+                let value_len = self.active_field_len(); // add helper below
+                let y = filter_inner.y + field_row;
+
+                // Cursor x = left + label width + typed text width
+                let mut x = filter_inner.x + label.len() as u16 + value_len as u16;
+
+                // clamp within the filter box
+                let max_x = filter_inner.x + filter_inner.width.saturating_sub(1);
+                if x > max_x {
+                    x = max_x;
+                }
+
+                // draw a vertical bar cursor
+                buf.get_mut(x, y)
+                    .set_char('▏')
+                    .set_style(Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20)));
+            }
+        }
 
         // "button"
         let btn = "[ Search ]";
