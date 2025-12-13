@@ -1,6 +1,7 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_cloudwatchlogs as cwl;
 use aws_types::region::Region;
+use chrono::{DateTime, Utc};
 use crossterm::event;
 use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
@@ -49,6 +50,8 @@ fn main() -> io::Result<()> {
         Err(e) => vec![format!("(error fetching log groups: {e})")],
     };
 
+    let (search_tx, search_rx) = std::sync::mpsc::channel::<String>();
+
     let mut app = App {
         app_title,
         exit: false,
@@ -66,6 +69,8 @@ fn main() -> io::Result<()> {
         editing: false,
         cursor_on: true,
         last_blink: Instant::now(),
+        search_tx,
+        search_rx,
     };
 
     let app_result = app.run(&mut terminal);
@@ -91,6 +96,8 @@ pub struct App {
     editing: bool,
     cursor_on: bool,
     last_blink: Instant,
+    search_tx: std::sync::mpsc::Sender<String>,
+    search_rx: std::sync::mpsc::Receiver<String>,
 }
 
 impl App {
@@ -104,6 +111,14 @@ impl App {
             } else {
                 self.cursor_on = true;
                 self.last_blink = Instant::now();
+            }
+
+            while let Ok(msg) = self.search_rx.try_recv() {
+                self.lines.push(msg);
+                // optional cap
+                if self.lines.len() > 2000 {
+                    self.lines.drain(0..500);
+                }
             }
 
             terminal.draw(|frame| self.draw(frame))?;
@@ -240,16 +255,45 @@ impl App {
     }
 
     fn start_search(&mut self) {
-        // for now: just prove wiring works
-        let group = self
-            .groups
-            .get(self.selected_group)
-            .cloned()
-            .unwrap_or_default();
-        self.lines.push(format!(
-            "SEARCH group={} start={} end={} query={}",
-            group, self.filter_start, self.filter_end, self.filter_query
-        ));
+        let group = match self.groups.get(self.selected_group) {
+            Some(g) => g.clone(),
+            None => return,
+        };
+
+        let region = self.region.clone();
+        let profile = self.profile.clone();
+        let start = self.filter_start.clone();
+        let end = self.filter_end.clone();
+        let pattern = self.filter_query.clone();
+
+        let tx = self.search_tx.clone();
+
+        // show immediate feedback
+        let _ = tx.send(format!("Searching {} ...", group));
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            let res = rt.block_on(fetch_log_events(
+                &region,
+                &profile,
+                &group,
+                start.as_str(),
+                end.as_str(),
+                pattern.as_str(),
+            ));
+
+            match res {
+                Ok(lines) => {
+                    let _ = tx.send(format!("--- {} results ---", lines.len()));
+                    for line in lines {
+                        let _ = tx.send(line);
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(format!("[search error] {e}"));
+                }
+            }
+        });
     }
 
     fn active_field_len(&self) -> usize {
@@ -562,4 +606,99 @@ async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>, cw
 
     out.sort();
     Ok(out)
+}
+
+fn parse_rfc3339_to_ms(s: &str) -> Result<i64, String> {
+    let dt: DateTime<Utc> = s
+        .parse::<DateTime<chrono::FixedOffset>>()
+        .map_err(|e| {
+            format!("Invalid datetime '{s}'. Use RFC3339 like 2025-12-13T10:00:00Z ({e})")
+        })?
+        .with_timezone(&Utc);
+    Ok(dt.timestamp_millis())
+}
+
+async fn fetch_log_events(
+    region: &str,
+    profile: &str,
+    log_group: &str,
+    start: &str,
+    end: &str,
+    pattern: &str,
+) -> Result<Vec<String>, String> {
+    let cfg = aws_config::from_env()
+        .region(aws_types::region::Region::new(region.to_string()))
+        .profile_name(profile)
+        .load()
+        .await;
+
+    let client = cwl::Client::new(&cfg);
+
+    // defaults if empty:
+    let now_ms = Utc::now().timestamp_millis();
+    let start_ms = if start.trim().is_empty() {
+        now_ms - 15 * 60 * 1000 // last 15 min
+    } else {
+        parse_rfc3339_to_ms(start)?
+    };
+
+    let end_ms = if end.trim().is_empty() {
+        now_ms
+    } else {
+        parse_rfc3339_to_ms(end)?
+    };
+
+    let mut out = Vec::new();
+    let mut next_token: Option<String> = None;
+
+    loop {
+        let mut req = client
+            .filter_log_events()
+            .log_group_name(log_group)
+            .start_time(start_ms)
+            .end_time(end_ms)
+            .interleaved(true);
+
+        if !pattern.trim().is_empty() {
+            req = req.filter_pattern(pattern);
+        }
+        if let Some(tok) = &next_token {
+            req = req.next_token(tok);
+        }
+
+        let resp = req.send().await.map_err(|e| e.to_string())?;
+
+        for ev in resp.events() {
+            let ts = ev.timestamp().unwrap_or(0);
+            let msg = ev.message().unwrap_or("").trim_end();
+
+            // format timestamp nicely (optional)
+            let ts_str = match chrono::DateTime::<Utc>::from_timestamp_millis(ts) {
+                Some(dt) => dt.to_rfc3339(),
+                None => ts.to_string(),
+            };
+
+            out.push(format!("{ts_str} {msg}"));
+        }
+
+        let new_token = resp.next_token().map(|s| s.to_string());
+        if new_token.is_none() || new_token == next_token {
+            break;
+        }
+        next_token = new_token;
+    }
+
+    Ok(out)
+}
+
+fn pretty_json_if_possible(s: &str) -> Option<String> {
+    let trimmed = s.trim_start();
+
+    // quick heuristic: JSON must start with { or [
+    if !trimmed.starts_with('{') && !trimmed.starts_with('[') {
+        return None;
+    }
+
+    let v: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+    serde_json::to_string_pretty(&v).ok()
 }
