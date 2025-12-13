@@ -75,6 +75,7 @@ fn main() -> io::Result<()> {
         searching: false,
         dots: 0,
         last_dots: Instant::now(),
+        results_scroll: 0,
     };
 
     let app_result = app.run(&mut terminal);
@@ -105,6 +106,7 @@ pub struct App {
     searching: bool,
     dots: usize,
     last_dots: Instant,
+    results_scroll: usize,
 }
 
 impl App {
@@ -201,19 +203,29 @@ impl App {
             KeyCode::Up if !self.editing => match self.focus {
                 Focus::Groups => self.groups_up(),
                 Focus::Filter => self.filter_prev(),
-                Focus::Results => {}
+                Focus::Results => self.results_up(),
             },
 
             KeyCode::Down if !self.editing => match self.focus {
                 Focus::Groups => self.groups_down(),
                 Focus::Filter => self.filter_next(),
-                Focus::Results => {}
+                Focus::Results => self.results_down(),
             },
 
             _ => {}
         }
 
         Ok(())
+    }
+
+    fn results_up(&mut self) {
+        self.results_scroll = self.results_scroll.saturating_sub(1);
+    }
+
+    fn results_down(&mut self) {
+        if self.results_scroll + 1 < self.lines.len() {
+            self.results_scroll += 1;
+        }
     }
 
     fn visible_group_rows(&self) -> usize {
@@ -467,27 +479,27 @@ impl Widget for &App {
             return;
         }
 
-        let mut row = 0u16;
-
+        let mut all_lines: Vec<&str> = Vec::new();
         for entry in &self.lines {
-            for line in entry.lines() {
-                let y = chunks[2].y + row;
-                if y >= chunks[2].bottom() {
-                    break;
-                }
-
-                Line::from(line).render(
-                    Rect {
-                        x: chunks[2].x,
-                        y,
-                        width: chunks[2].width,
-                        height: 1,
-                    },
-                    buf,
-                );
-
-                row += 1;
+            for l in entry.lines() {
+                all_lines.push(l);
             }
+        }
+
+        let height = chunks[2].height as usize;
+        let start = self.results_scroll;
+        let end = (start + height).min(all_lines.len());
+
+        for (i, line) in all_lines[start..end].iter().enumerate() {
+            Line::from(*line).render(
+                Rect {
+                    x: chunks[2].x,
+                    y: chunks[2].y + i as u16,
+                    width: chunks[2].width,
+                    height: 1,
+                },
+                buf,
+            );
         }
 
         let mut row_y = filter_inner.y;
