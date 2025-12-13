@@ -416,21 +416,27 @@ impl Widget for &App {
                 );
         }
 
-        for (i, line) in self.lines.iter().enumerate() {
-            let y = chunks[2].y + i as u16;
-            if y >= chunks[2].bottom() {
-                break;
-            }
+        let mut row = 0u16;
 
-            Line::from(line.as_str()).render(
-                Rect {
-                    x: chunks[2].x,
-                    y,
-                    width: chunks[2].width,
-                    height: 1,
-                },
-                buf,
-            );
+        for entry in &self.lines {
+            for line in entry.lines() {
+                let y = chunks[2].y + row;
+                if y >= chunks[2].bottom() {
+                    break;
+                }
+
+                Line::from(line).render(
+                    Rect {
+                        x: chunks[2].x,
+                        y,
+                        width: chunks[2].width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+                row += 1;
+            }
         }
 
         let mut row_y = filter_inner.y;
@@ -678,7 +684,17 @@ async fn fetch_log_events(
                 None => ts.to_string(),
             };
 
-            out.push(format!("{ts_str} {msg}"));
+            if let Some((prefix, json)) = msg.split_once('{') {
+                let json_with_brace = format!("{{{}", json);
+
+                if let Some(pretty) = pretty_json_if_possible(&json_with_brace) {
+                    out.push(format!("{}{}\n{}", ts_str, prefix, pretty));
+                } else {
+                    out.push(format!("{ts_str} {msg}"));
+                }
+            } else {
+                out.push(format!("{ts_str} {msg}"));
+            }
         }
 
         let new_token = resp.next_token().map(|s| s.to_string());
