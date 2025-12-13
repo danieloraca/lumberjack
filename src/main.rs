@@ -20,6 +20,7 @@ use std::{env, io, sync::mpsc, thread};
 enum Focus {
     Groups,
     Filter,
+    Results,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -71,6 +72,9 @@ fn main() -> io::Result<()> {
         last_blink: Instant::now(),
         search_tx,
         search_rx,
+        searching: false,
+        dots: 0,
+        last_dots: Instant::now(),
     };
 
     let app_result = app.run(&mut terminal);
@@ -98,6 +102,9 @@ pub struct App {
     last_blink: Instant,
     search_tx: std::sync::mpsc::Sender<String>,
     search_rx: std::sync::mpsc::Receiver<String>,
+    searching: bool,
+    dots: usize,
+    last_dots: Instant,
 }
 
 impl App {
@@ -114,11 +121,23 @@ impl App {
             }
 
             while let Ok(msg) = self.search_rx.try_recv() {
+                if msg == "__SEARCH_DONE__" {
+                    self.searching = false;
+                    // when done, move focus to results so arrows can scroll later etc.
+                    self.focus = Focus::Results;
+                    continue;
+                }
+
                 self.lines.push(msg);
                 // optional cap
                 if self.lines.len() > 2000 {
                     self.lines.drain(0..500);
                 }
+            }
+
+            if self.searching && self.last_dots.elapsed() >= Duration::from_millis(250) {
+                self.dots = (self.dots + 1) % 7;
+                self.last_dots = Instant::now();
             }
 
             terminal.draw(|frame| self.draw(frame))?;
@@ -149,6 +168,7 @@ impl App {
                 self.focus = match self.focus {
                     Focus::Groups => Focus::Filter,
                     Focus::Filter => Focus::Groups,
+                    Focus::Results => Focus::Groups,
                 };
             }
 
@@ -181,11 +201,13 @@ impl App {
             KeyCode::Up if !self.editing => match self.focus {
                 Focus::Groups => self.groups_up(),
                 Focus::Filter => self.filter_prev(),
+                Focus::Results => {}
             },
 
             KeyCode::Down if !self.editing => match self.focus {
                 Focus::Groups => self.groups_down(),
                 Focus::Filter => self.filter_next(),
+                Focus::Results => {}
             },
 
             _ => {}
@@ -255,6 +277,13 @@ impl App {
     }
 
     fn start_search(&mut self) {
+        self.searching = true;
+        self.dots = 0;
+        self.last_dots = Instant::now();
+        self.focus = Focus::Results; // lose focus from form
+        self.editing = false;
+        self.lines.clear(); // optional
+
         let group = match self.groups.get(self.selected_group) {
             Some(g) => g.clone(),
             None => return,
@@ -293,6 +322,8 @@ impl App {
                     let _ = tx.send(format!("[search error] {e}"));
                 }
             }
+
+            let _ = tx.send("__SEARCH_DONE__".to_string());
         });
     }
 
@@ -414,6 +445,26 @@ impl Widget for &App {
                     },
                     buf,
                 );
+        }
+
+        if self.searching && self.lines.is_empty() {
+            let dots = ".".repeat(self.dots);
+            let msg = format!("Searching{dots}");
+
+            Line::from(msg)
+                .style(Style::default().fg(Color::Gray))
+                .render(
+                    Rect {
+                        x: chunks[2].x,
+                        y: chunks[2].y,
+                        width: chunks[2].width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+            // stop here so we don't render stale lines underneath
+            return;
         }
 
         let mut row = 0u16;
