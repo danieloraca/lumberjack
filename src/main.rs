@@ -14,6 +14,20 @@ use ratatui::{
 };
 use std::{env, io, sync::mpsc, thread, time::Duration};
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Focus {
+    Groups,
+    Filter,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum FilterField {
+    Start,
+    End,
+    Query,
+    Search,
+}
+
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
 
@@ -43,6 +57,12 @@ fn main() -> io::Result<()> {
         groups_scroll: 0,
         profile,
         region,
+        focus: Focus::Groups,
+        filter_start: String::new(),
+        filter_end: String::new(),
+        filter_query: String::new(),
+        filter_field: FilterField::Query,
+        editing: false,
     };
 
     let app_result = app.run(&mut terminal);
@@ -60,6 +80,12 @@ pub struct App {
     groups_scroll: usize,
     profile: String,
     region: String,
+    focus: Focus,
+    filter_start: String,
+    filter_end: String,
+    filter_query: String,
+    filter_field: FilterField,
+    editing: bool,
 }
 
 impl App {
@@ -86,22 +112,52 @@ impl App {
         }
 
         match key_event.code {
-            KeyCode::Char('q') => self.exit = true,
-            KeyCode::Char('a') => self.lines.push("New line".to_string()),
-            KeyCode::Up => {
-                if !self.groups.is_empty() {
-                    self.selected_group = self.selected_group.saturating_sub(1);
-                    let visible = self.visible_group_rows();
-                    self.clamp_groups_scroll(visible);
+            KeyCode::Char('q') if !self.editing => self.exit = true,
+
+            // Switch focus between left and right panes
+            KeyCode::Tab if !self.editing => {
+                self.focus = match self.focus {
+                    Focus::Groups => Focus::Filter,
+                    Focus::Filter => Focus::Groups,
+                };
+            }
+
+            // ESC cancels editing
+            KeyCode::Esc => {
+                self.editing = false;
+            }
+
+            // While editing: text input goes into the active field
+            KeyCode::Backspace if self.editing => {
+                self.active_field_mut().pop();
+            }
+            KeyCode::Char(c) if self.editing => {
+                self.active_field_mut().push(c);
+            }
+
+            // Enter: start/stop editing, or activate Search
+            KeyCode::Enter => {
+                if self.focus == Focus::Filter
+                    && self.filter_field == FilterField::Search
+                    && !self.editing
+                {
+                    self.start_search(); // stub for now
+                } else {
+                    self.editing = !self.editing;
                 }
             }
-            KeyCode::Down => {
-                if !self.groups.is_empty() {
-                    self.selected_group = (self.selected_group + 1).min(self.groups.len() - 1);
-                    let visible = self.visible_group_rows();
-                    self.clamp_groups_scroll(visible);
-                }
-            }
+
+            // Navigation when NOT editing
+            KeyCode::Up if !self.editing => match self.focus {
+                Focus::Groups => self.groups_up(),
+                Focus::Filter => self.filter_prev(),
+            },
+
+            KeyCode::Down if !self.editing => match self.focus {
+                Focus::Groups => self.groups_down(),
+                Focus::Filter => self.filter_next(),
+            },
+
             _ => {}
         }
 
@@ -128,6 +184,58 @@ impl App {
         let max_scroll = self.groups.len().saturating_sub(visible_rows);
         self.groups_scroll = self.groups_scroll.min(max_scroll);
     }
+
+    fn active_field_mut(&mut self) -> &mut String {
+        match self.filter_field {
+            FilterField::Start => &mut self.filter_start,
+            FilterField::End => &mut self.filter_end,
+            FilterField::Query => &mut self.filter_query,
+            FilterField::Search => &mut self.filter_query, // unused; won't type into Search
+        }
+    }
+
+    fn groups_up(&mut self) {
+        if !self.groups.is_empty() {
+            self.selected_group = self.selected_group.saturating_sub(1);
+            self.clamp_groups_scroll(self.visible_group_rows());
+        }
+    }
+    fn groups_down(&mut self) {
+        if !self.groups.is_empty() {
+            self.selected_group = (self.selected_group + 1).min(self.groups.len() - 1);
+            self.clamp_groups_scroll(self.visible_group_rows());
+        }
+    }
+
+    fn filter_prev(&mut self) {
+        self.filter_field = match self.filter_field {
+            FilterField::Start => FilterField::Start,
+            FilterField::End => FilterField::Start,
+            FilterField::Query => FilterField::End,
+            FilterField::Search => FilterField::Query,
+        };
+    }
+    fn filter_next(&mut self) {
+        self.filter_field = match self.filter_field {
+            FilterField::Start => FilterField::End,
+            FilterField::End => FilterField::Query,
+            FilterField::Query => FilterField::Search,
+            FilterField::Search => FilterField::Search,
+        };
+    }
+
+    fn start_search(&mut self) {
+        // for now: just prove wiring works
+        let group = self
+            .groups
+            .get(self.selected_group)
+            .cloned()
+            .unwrap_or_default();
+        self.lines.push(format!(
+            "SEARCH group={} start={} end={} query={}",
+            group, self.filter_start, self.filter_end, self.filter_query
+        ));
+    }
 }
 
 impl Widget for &App {
@@ -147,6 +255,18 @@ impl Widget for &App {
         let header_style = Style::default().bg(Color::Rgb(30 as u8, 30 as u8, 30 as u8));
         let footer_style = Style::default().bg(Color::Rgb(40, 40, 40)).fg(Color::Gray);
 
+        let groups_border = if self.focus == Focus::Groups {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+
+        let filter_border = if self.focus == Focus::Filter {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+
         buf.set_style(chunks[0], header_style);
         buf.set_style(chunks[3], footer_style);
 
@@ -154,6 +274,9 @@ impl Widget for &App {
             Layout::horizontal([Constraint::Length(20), Constraint::Min(20)]).split(chunks[0]);
         let footer =
             Layout::horizontal([Constraint::Min(0), Constraint::Length(20)]).split(chunks[3]);
+        let groups_row =
+            Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .split(chunks[1]);
 
         let header_right_text: String = format!(
             "Profile: {} | Region: {}",
@@ -165,10 +288,10 @@ impl Widget for &App {
             .render(header[0], buf);
         Line::from(header_right_text)
             .right_aligned()
-            .style(Style::default().fg(Color::Green))
+            .style(header_style)
             .render(header[1], buf);
 
-        Line::from("↑↓ Select  q Quit")
+        Line::from("Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit")
             .style(footer_style)
             .render(footer[0], buf);
 
@@ -177,9 +300,25 @@ impl Widget for &App {
             .style(footer_style)
             .render(footer[1], buf);
 
-        let groups_block = Block::bordered().title("Groups").style(groups_style);
-        let inner = groups_block.inner(chunks[1]);
-        groups_block.render(chunks[1], buf);
+        let groups_block = Block::bordered()
+            .title("Groups (Tab to switch)")
+            .style(groups_style)
+            .border_style(groups_border);
+
+        let inner = groups_block.inner(groups_row[0]);
+        groups_block.render(groups_row[0], buf);
+
+        let filter_style = Style::default().bg(Color::Rgb(20, 20, 20));
+        let filter_block = Block::bordered()
+            .title("Filter")
+            .style(filter_style)
+            .border_style(filter_border);
+        let filter_inner = filter_block.inner(groups_row[1]);
+        filter_block.render(groups_row[1], buf);
+
+        // Line::from("Filter:")
+        //     .style(filter_style.fg(Color::White))
+        //     .render(filter_inner, buf);
 
         let visible_rows = inner.height as usize;
         let start = self.groups_scroll;
@@ -225,6 +364,101 @@ impl Widget for &App {
                 buf,
             );
         }
+
+        let mut row_y = filter_inner.y;
+
+        let field_style =
+            |field: FilterField, focus: Focus, current: FilterField, editing: bool| {
+                if focus == Focus::Filter && field == current {
+                    if editing {
+                        // actively editing → strong highlight
+                        Style::default().bg(Color::Gray).fg(Color::Black)
+                    } else {
+                        // focused but not editing → white
+                        Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20))
+                    }
+                } else {
+                    // unfocused field
+                    Style::default()
+                        .fg(Color::Rgb(100, 100, 100))
+                        .bg(Color::Rgb(20, 20, 20))
+                }
+            };
+
+        let line = |label: &str, value: &str| format!("{label}: {value}");
+
+        Line::from(line("Start", &self.filter_start))
+            .style(field_style(
+                FilterField::Start,
+                self.focus,
+                self.filter_field,
+                self.editing,
+            ))
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
+        row_y += 1;
+
+        Line::from(line("End", &self.filter_end))
+            .style(field_style(
+                FilterField::End,
+                self.focus,
+                self.filter_field,
+                self.editing,
+            ))
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
+        row_y += 1;
+
+        Line::from(line("Query", &self.filter_query))
+            .style(field_style(
+                FilterField::Query,
+                self.focus,
+                self.filter_field,
+                self.editing,
+            ))
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
+        row_y += 1;
+
+        // "button"
+        let btn = "[ Search ]";
+        Line::from(btn)
+            .style(field_style(
+                FilterField::Search,
+                self.focus,
+                self.filter_field,
+                false,
+            ))
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
     }
 }
 
