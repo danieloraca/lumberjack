@@ -41,4 +41,10 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
 ```bash
 git clone https://github.com/danieloraca/lumberjack.git
 cd lumberjack
-cargo build --release
+cargo build --release```
+
+---
+
+## Running
+```bash
+cargo run -- --profile=<aws-profile> --region=<aws-region>```
