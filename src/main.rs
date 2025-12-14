@@ -819,13 +819,24 @@ async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>, cw
 }
 
 fn parse_rfc3339_to_ms(s: &str) -> Result<i64, String> {
-    let dt: DateTime<Utc> = s
-        .parse::<DateTime<chrono::FixedOffset>>()
-        .map_err(|e| {
-            format!("Invalid datetime '{s}'. Use RFC3339 like 2025-12-13T10:00:00Z ({e})")
-        })?
-        .with_timezone(&Utc);
-    Ok(dt.timestamp_millis())
+    let s = s.trim();
+
+    // 1) Try full RFC3339 first
+    if let Ok(dt) = s.parse::<DateTime<chrono::FixedOffset>>() {
+        return Ok(dt.with_timezone(&Utc).timestamp_millis());
+    }
+
+    // 2) Try "YYYY-MM-DD HH:MM:SS" (assume UTC)
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+        let dt = DateTime::<Utc>::from_utc(naive, Utc);
+        return Ok(dt.timestamp_millis());
+    }
+
+    Err(format!(
+        "Invalid datetime '{s}'. Use either:\n\
+         - RFC3339: 2025-12-11T10:00:00Z\n\
+         - Simple:  2025-12-11 10:00:00"
+    ))
 }
 
 async fn fetch_log_events(
