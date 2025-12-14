@@ -6,15 +6,14 @@ use crossterm::event;
 use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Margin},
-    prelude::{Buffer, Rect},
+    layout::{Constraint, Layout},
+    prelude::Rect,
     style::{Color, Style, Stylize},
-    symbols::border,
     text::Line,
-    widgets::{Block, Gauge, Widget},
+    widgets::{Block, Widget},
 };
 use std::time::{Duration, Instant};
-use std::{env, io, sync::mpsc, thread};
+use std::{env, io};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Focus {
@@ -221,6 +220,75 @@ impl App {
         Ok(())
     }
 
+    fn draw_scrollbar(
+        buf: &mut ratatui::buffer::Buffer,
+        area: Rect,
+        scroll: usize,
+        total: usize,
+        focus: bool,
+    ) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        // x column for scrollbar (rightmost column inside results block)
+        let x = area.x + area.width - 1;
+
+        // Style: subtle when unfocused, brighter when focused
+        let track_style = if focus {
+            Style::default()
+                .fg(Color::Rgb(100, 100, 100))
+                .bg(Color::Black)
+        } else {
+            Style::default()
+                .fg(Color::Rgb(60, 60, 60))
+                .bg(Color::Rgb(14, 14, 14))
+        };
+
+        let thumb_style = if focus {
+            Style::default().fg(Color::White).bg(Color::Black)
+        } else {
+            Style::default()
+                .fg(Color::Rgb(180, 180, 180))
+                .bg(Color::Rgb(14, 14, 14))
+        };
+
+        // draw track
+        for dy in 0..area.height {
+            buf.get_mut(x, area.y + dy)
+                .set_char('│')
+                .set_style(track_style);
+        }
+
+        if total <= 1 {
+            // full thumb
+            buf.get_mut(x, area.y).set_char('█').set_style(thumb_style);
+            return;
+        }
+
+        let view = area.height as usize;
+        if view == 0 {
+            return;
+        }
+
+        // thumb size at least 1
+        let thumb_h = ((view * view) / total).clamp(1, view);
+        let max_scroll = total.saturating_sub(view);
+        let scroll = scroll.min(max_scroll);
+
+        // thumb position
+        let thumb_top = if max_scroll == 0 {
+            0
+        } else {
+            (scroll * (view - thumb_h)) / max_scroll
+        };
+
+        for i in 0..thumb_h {
+            let y = area.y + (thumb_top + i) as u16;
+            buf.get_mut(x, y).set_char('█').set_style(thumb_style);
+        }
+    }
+
     fn results_up(&mut self) {
         self.results_scroll = self.results_scroll.saturating_sub(1);
     }
@@ -360,12 +428,6 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
-        let pane_active = Style::default().bg(Color::Black).fg(Color::White);
-
-        let pane_inactive = Style::default()
-            .bg(Color::Rgb(18, 18, 18)) // subtle gray
-            .fg(Color::Rgb(120, 120, 120));
-
         let chunks = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(6),
@@ -471,12 +533,6 @@ impl Widget for &App {
         let filter_inner = filter_block.inner(groups_row[1]);
         filter_block.render(groups_row[1], buf);
 
-        let results_pane_style = if self.focus == Focus::Results {
-            pane_active
-        } else {
-            pane_inactive
-        };
-
         let results_border = if self.focus == Focus::Results {
             Style::default().fg(Color::Yellow)
         } else {
@@ -496,6 +552,7 @@ impl Widget for &App {
             .style(results_block_style)
             .border_style(results_border);
 
+        // results_block.render(chunks[2], buf);
         let results_inner = results_block.inner(chunks[2]);
         results_block.render(chunks[2], buf);
 
@@ -535,9 +592,9 @@ impl Widget for &App {
                 .style(Style::default().fg(Color::Gray))
                 .render(
                     Rect {
-                        x: chunks[2].x,
-                        y: chunks[2].y,
-                        width: chunks[2].width,
+                        x: results_inner.x,
+                        y: results_inner.y,
+                        width: results_inner.width,
                         height: 1,
                     },
                     buf,
@@ -554,21 +611,37 @@ impl Widget for &App {
             }
         }
 
-        let height = chunks[2].height as usize;
+        let scrollbar_w = 1u16;
+        let text_area = Rect {
+            x: results_inner.x,
+            y: results_inner.y,
+            width: results_inner.width.saturating_sub(scrollbar_w),
+            height: results_inner.height,
+        };
+
+        let height = text_area.height as usize;
         let start = self.results_scroll;
         let end = (start + height).min(all_lines.len());
 
         for (i, line) in all_lines[start..end].iter().enumerate() {
             Line::from(*line).render(
                 Rect {
-                    x: chunks[2].x,
-                    y: chunks[2].y + i as u16,
-                    width: chunks[2].width,
+                    x: text_area.x,
+                    y: text_area.y + i as u16,
+                    width: text_area.width,
                     height: 1,
                 },
                 buf,
             );
         }
+
+        App::draw_scrollbar(
+            buf,
+            results_inner,
+            self.results_scroll,
+            all_lines.len(),
+            self.focus == Focus::Results,
+        );
 
         let mut row_y = filter_inner.y;
 
