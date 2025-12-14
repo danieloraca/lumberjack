@@ -123,6 +123,9 @@ impl App {
             }
 
             while let Ok(msg) = self.search_rx.try_recv() {
+                let total = self.results_total_lines();
+                self.results_scroll = self.results_scroll.min(total.saturating_sub(1));
+
                 if msg == "__SEARCH_DONE__" {
                     self.searching = false;
                     // when done, move focus to results so arrows can scroll later etc.
@@ -222,8 +225,13 @@ impl App {
         self.results_scroll = self.results_scroll.saturating_sub(1);
     }
 
+    fn results_total_lines(&self) -> usize {
+        self.lines.iter().map(|s| s.lines().count()).sum()
+    }
+
     fn results_down(&mut self) {
-        if self.results_scroll + 1 < self.lines.len() {
+        let total = self.results_total_lines();
+        if self.results_scroll + 1 < total {
             self.results_scroll += 1;
         }
     }
@@ -295,6 +303,7 @@ impl App {
         self.focus = Focus::Results; // lose focus from form
         self.editing = false;
         self.lines.clear(); // optional
+        self.results_scroll = 0;
 
         let group = match self.groups.get(self.selected_group) {
             Some(g) => g.clone(),
@@ -351,6 +360,12 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        let pane_active = Style::default().bg(Color::Black).fg(Color::White);
+
+        let pane_inactive = Style::default()
+            .bg(Color::Rgb(18, 18, 18)) // subtle gray
+            .fg(Color::Rgb(120, 120, 120));
+
         let chunks = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(6),
@@ -359,10 +374,23 @@ impl Widget for &App {
         ])
         .split(area);
 
-        let groups_style = Style::default().bg(Color::Rgb(10 as u8, 35 as u8, 200 as u8));
-        let selected_style = groups_style
-            .fg(Color::Yellow)
-            .add_modifier(ratatui::style::Modifier::BOLD);
+        let groups_item_style = if self.focus == Focus::Groups {
+            Style::default().bg(Color::Black).fg(Color::White)
+        } else {
+            Style::default()
+                .bg(Color::Rgb(14, 14, 14))
+                .fg(Color::Rgb(140, 140, 140))
+        };
+
+        let groups_selected_style = if self.focus == Focus::Groups {
+            Style::default()
+                .bg(Color::Rgb(40, 40, 40))
+                .fg(Color::White)
+                .add_modifier(ratatui::style::Modifier::BOLD)
+        } else {
+            Style::default().bg(Color::Rgb(18, 18, 18)).fg(Color::White) // still readable while unfocused
+        };
+
         let header_style = Style::default().bg(Color::Rgb(30 as u8, 30 as u8, 30 as u8));
         let footer_style = Style::default().bg(Color::Rgb(40, 40, 40)).fg(Color::Gray);
 
@@ -411,25 +439,65 @@ impl Widget for &App {
             .style(footer_style)
             .render(footer[1], buf);
 
+        let groups_block_style = if self.focus == Focus::Groups {
+            Style::default().bg(Color::Black).fg(Color::White)
+        } else {
+            Style::default()
+                .bg(Color::Rgb(14, 14, 14))
+                .fg(Color::Rgb(140, 140, 140))
+        };
+
         let groups_block = Block::bordered()
             .title("Groups (Tab to switch)")
-            .style(groups_style)
+            .style(groups_block_style)
             .border_style(groups_border);
 
         let inner = groups_block.inner(groups_row[0]);
         groups_block.render(groups_row[0], buf);
 
-        let filter_style = Style::default().bg(Color::Rgb(20, 20, 20));
+        let filter_block_style = if self.focus == Focus::Filter {
+            Style::default().bg(Color::Rgb(20, 20, 20)).fg(Color::White)
+        } else {
+            Style::default()
+                .bg(Color::Rgb(14, 14, 14))
+                .fg(Color::Rgb(140, 140, 140))
+        };
+
         let filter_block = Block::bordered()
             .title("Filter")
-            .style(filter_style)
+            .style(filter_block_style)
             .border_style(filter_border);
+
         let filter_inner = filter_block.inner(groups_row[1]);
         filter_block.render(groups_row[1], buf);
 
-        // Line::from("Filter:")
-        //     .style(filter_style.fg(Color::White))
-        //     .render(filter_inner, buf);
+        let results_pane_style = if self.focus == Focus::Results {
+            pane_active
+        } else {
+            pane_inactive
+        };
+
+        let results_border = if self.focus == Focus::Results {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+
+        let results_block_style = if self.focus == Focus::Results {
+            Style::default().bg(Color::Black).fg(Color::White)
+        } else {
+            Style::default()
+                .bg(Color::Rgb(14, 14, 14))
+                .fg(Color::Rgb(140, 140, 140))
+        };
+
+        let results_block = Block::bordered()
+            .title("Results")
+            .style(results_block_style)
+            .border_style(results_border);
+
+        let results_inner = results_block.inner(chunks[2]);
+        results_block.render(chunks[2], buf);
 
         let visible_rows = inner.height as usize;
         let start = self.groups_scroll;
@@ -444,9 +512,9 @@ impl Widget for &App {
             let y = inner.y + row as u16;
             Line::from(format!("{marker}{group}"))
                 .style(if selected {
-                    selected_style
+                    groups_selected_style
                 } else {
-                    groups_style
+                    groups_item_style
                 })
                 .render(
                     Rect {
