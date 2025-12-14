@@ -39,6 +39,6 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/lumberjack.git
+git clone https://github.com/danieloraca/lumberjack.git
 cd lumberjack
 cargo build --release
