@@ -1387,7 +1387,6 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-cloudwatchlogs",
- "aws-types",
  "chrono",
  "crossterm 0.29.0",
  "ratatui",
