@@ -132,8 +132,9 @@ impl App {
 
             // Start group search
             KeyCode::Char('/') if self.focus == Focus::Groups && !self.editing => {
+                // Enter search mode but KEEP the last query.
+                // That way hitting `/` again lets you refine the previous search.
                 self.group_search_active = true;
-                self.group_search_input.clear();
                 self.focus = Focus::Groups;
                 return Ok(());
             }
@@ -458,5 +459,133 @@ impl App {
         self.groups = filtered;
         self.selected_group = 0;
         self.groups_scroll = 0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app_with_groups(groups: Vec<&str>) -> App {
+        let groups_owned: Vec<String> = groups.iter().map(|s| s.to_string()).collect();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        App {
+            app_title: "Test".to_string(),
+            exit: false,
+            lines: Vec::new(),
+
+            all_groups: groups_owned.clone(),
+            groups: groups_owned,
+            selected_group: 0,
+            groups_scroll: 0,
+
+            profile: "test-profile".to_string(),
+            region: "eu-west-1".to_string(),
+            focus: Focus::Groups,
+
+            filter_start: String::new(),
+            filter_end: String::new(),
+            filter_query: String::new(),
+            filter_field: FilterField::Query,
+            editing: false,
+            cursor_on: true,
+            last_blink: Instant::now(),
+
+            group_search_active: false,
+            group_search_input: String::new(),
+
+            search_tx: tx,
+            search_rx: rx,
+            searching: false,
+            dots: 0,
+            last_dots: Instant::now(),
+            results_scroll: 0,
+        }
+    }
+
+    // --- fuzzy_match tests ---
+
+    #[test]
+    fn fuzzy_match_empty_needle_matches_anything() {
+        assert!(App::fuzzy_match("hello", ""));
+        assert!(App::fuzzy_match("", ""));
+    }
+
+    #[test]
+    fn fuzzy_match_simple_subsequence() {
+        assert!(App::fuzzy_match("aws-lambda-api", "ala")); // a-l-a in order
+        assert!(App::fuzzy_match("/aws/lambda/foo", "alf")); // a-l-f in order
+        assert!(!App::fuzzy_match("cloudwatch", "cwz")); // z not present
+    }
+
+    #[test]
+    fn fuzzy_match_case_insensitive() {
+        assert!(App::fuzzy_match("AWS-LAMBDA", "aws"));
+        assert!(App::fuzzy_match("aws-lambda", "AWS"));
+    }
+
+    // --- apply_group_search_filter tests ---
+
+    #[test]
+    fn apply_group_search_filter_restores_full_list_when_inactive() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
+
+        // not active, even if input is non-empty → should ignore and restore full list
+        app.group_search_active = false;
+        app.group_search_input = "api".to_string();
+        app.apply_group_search_filter();
+
+        assert_eq!(app.groups.len(), 2);
+        assert_eq!(app.groups[0], "/aws/lambda/api");
+        assert_eq!(app.groups[1], "/aws/lambda/worker");
+    }
+
+    #[test]
+    fn apply_group_search_filter_filters_when_active() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
+
+        app.group_search_active = true;
+        app.group_search_input = "wrk".to_string(); // matches "worker"
+
+        app.apply_group_search_filter();
+
+        assert_eq!(app.groups.len(), 1);
+        assert_eq!(app.groups[0], "/aws/lambda/worker");
+        assert_eq!(app.selected_group, 0);
+        assert_eq!(app.groups_scroll, 0);
+    }
+
+    #[test]
+    fn apply_group_search_filter_no_matches_shows_placeholder() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
+
+        app.group_search_active = true;
+        app.group_search_input = "xyz".to_string();
+
+        app.apply_group_search_filter();
+
+        assert_eq!(app.groups.len(), 1);
+        assert_eq!(app.groups[0], "(no matches)");
+        assert_eq!(app.selected_group, 0);
+    }
+
+    #[test]
+    fn apply_group_search_filter_clearing_input_restores_all_groups() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
+
+        // First, narrow to one
+        app.group_search_active = true;
+        app.group_search_input = "api".to_string();
+        app.apply_group_search_filter();
+        assert_eq!(app.groups.len(), 1);
+
+        // Then, clear the input and reapply
+        app.group_search_input.clear();
+        app.apply_group_search_filter();
+
+        assert_eq!(app.groups.len(), 2);
+        assert_eq!(app.groups[0], "/aws/lambda/api");
+        assert_eq!(app.groups[1], "/aws/lambda/worker");
     }
 }
