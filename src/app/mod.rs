@@ -2,8 +2,8 @@ use std::io;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use crossterm::event;
-use crossterm::event::{KeyCode, KeyEventKind};
+use ratatui::crossterm::event;
+use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::prelude::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::{DefaultTerminal, Frame};
@@ -101,7 +101,10 @@ impl App {
         frame.render_widget(&*self, frame.area());
     }
 
-    fn handle_key_event(&mut self, key_event: crossterm::event::KeyEvent) -> io::Result<()> {
+    fn handle_key_event(
+        &mut self,
+        key_event: ratatui::crossterm::event::KeyEvent,
+    ) -> io::Result<()> {
         if key_event.kind != KeyEventKind::Press {
             return Ok(());
         }
