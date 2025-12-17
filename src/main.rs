@@ -34,6 +34,7 @@ fn main() -> io::Result<()> {
         app_title,
         exit: false,
         lines: Vec::new(),
+        all_groups: groups.clone(),
         groups,
         selected_group: 0,
         groups_scroll: 0,
@@ -47,6 +48,10 @@ fn main() -> io::Result<()> {
         editing: false,
         cursor_on: true,
         last_blink: Instant::now(),
+
+        group_search_active: false,
+        group_search_input: String::new(),
+
         search_tx,
         search_rx,
         searching: false,

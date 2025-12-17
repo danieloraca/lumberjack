@@ -72,7 +72,13 @@ impl Widget for &App {
             .style(header_style)
             .render(header[1], buf);
 
-        Line::from("Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit")
+        let footer_left = if self.group_search_active {
+            format!("Search groups: {}", self.group_search_input)
+        } else {
+            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit".to_string()
+        };
+
+        Line::from(footer_left)
             .style(footer_style)
             .render(footer[0], buf);
 

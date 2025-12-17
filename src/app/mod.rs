@@ -29,12 +29,16 @@ pub struct App {
     pub app_title: String,
     pub exit: bool,
     pub lines: Vec<String>,
+
+    pub all_groups: Vec<String>,
     pub groups: Vec<String>,
     pub selected_group: usize,
     pub groups_scroll: usize,
+
     pub profile: String,
     pub region: String,
     pub focus: Focus,
+
     pub filter_start: String,
     pub filter_end: String,
     pub filter_query: String,
@@ -42,6 +46,10 @@ pub struct App {
     pub editing: bool,
     pub cursor_on: bool,
     pub last_blink: Instant,
+
+    pub group_search_active: bool,
+    pub group_search_input: String,
+
     pub search_tx: Sender<String>,
     pub search_rx: Receiver<String>,
     pub searching: bool,
@@ -110,7 +118,7 @@ impl App {
         }
 
         match key_event.code {
-            KeyCode::Char('q') if !self.editing => self.exit = true,
+            KeyCode::Char('q') if !self.editing && !self.group_search_active => self.exit = true,
 
             // Switch focus between left and right panes
             KeyCode::Tab if !self.editing => {
@@ -121,17 +129,47 @@ impl App {
                 };
             }
 
+            ratatui::crossterm::event::KeyCode::Char('/')
+                if self.focus == Focus::Groups && !self.editing =>
+            {
+                self.group_search_active = true;
+                self.group_search_input.clear();
+                // Optional: move focus to groups explicitly
+                self.focus = Focus::Groups;
+                return Ok(());
+            }
+
             // ESC cancels editing
             KeyCode::Esc => {
+                if self.group_search_active {
+                    self.group_search_active = false;
+                    self.group_search_input.clear();
+                    self.apply_group_search_filter();
+                    return Ok(());
+                }
                 self.editing = false;
             }
 
-            // While editing: text input goes into the active field
-            KeyCode::Backspace if self.editing => {
-                self.active_field_mut().pop();
+            // While group search is active: handle text editing
+            KeyCode::Backspace if self.group_search_active => {
+                self.group_search_input.pop();
+                self.apply_group_search_filter();
+                return Ok(());
             }
-            KeyCode::Char(c) if self.editing => {
-                self.active_field_mut().push(c);
+            KeyCode::Char(c) if self.group_search_active => {
+                // Avoid treating '/' as part of the query if you don’t want that
+                if !c.is_control() {
+                    self.group_search_input.push(c);
+                    self.apply_group_search_filter();
+                }
+                return Ok(());
+            }
+
+            // Confirm search with Enter (optional: exit search mode but keep filtered groups)
+            KeyCode::Enter if self.group_search_active => {
+                self.group_search_active = false;
+                // keep the filtered groups & selection
+                return Ok(());
             }
 
             // Enter: start/stop editing, or activate Search
@@ -368,5 +406,50 @@ impl App {
             FilterField::Query => self.filter_query.len(),
             FilterField::Search => 0,
         }
+    }
+
+    fn fuzzy_match(haystack: &str, needle: &str) -> bool {
+        if needle.is_empty() {
+            return true;
+        }
+
+        let haystack = haystack.to_lowercase();
+        let needle = needle.to_lowercase();
+        let mut it = haystack.chars();
+
+        for c in needle.chars() {
+            if let Some(_) = it.by_ref().find(|&hc| hc == c) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn apply_group_search_filter(&mut self) {
+        if !self.group_search_active || self.group_search_input.is_empty() {
+            // No active search → restore original list
+            self.groups = self.all_groups.clone();
+            self.selected_group = 0;
+            self.groups_scroll = 0;
+            return;
+        }
+
+        let pattern = self.group_search_input.clone();
+        let mut filtered: Vec<String> = self
+            .all_groups
+            .iter()
+            .filter(|g| Self::fuzzy_match(g, &pattern))
+            .cloned()
+            .collect();
+
+        if filtered.is_empty() {
+            filtered.push("(no matches)".to_string());
+        }
+
+        self.groups = filtered;
+        self.selected_group = 0;
+        self.groups_scroll = 0;
     }
 }
