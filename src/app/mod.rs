@@ -118,9 +118,10 @@ impl App {
         }
 
         match key_event.code {
+            // q should NOT quit while editing or while group search is active
             KeyCode::Char('q') if !self.editing && !self.group_search_active => self.exit = true,
 
-            // Switch focus between left and right panes
+            // Switch focus between panes
             KeyCode::Tab if !self.editing => {
                 self.focus = match self.focus {
                     Focus::Groups => Focus::Filter,
@@ -129,17 +130,15 @@ impl App {
                 };
             }
 
-            ratatui::crossterm::event::KeyCode::Char('/')
-                if self.focus == Focus::Groups && !self.editing =>
-            {
+            // Start group search
+            KeyCode::Char('/') if self.focus == Focus::Groups && !self.editing => {
                 self.group_search_active = true;
                 self.group_search_input.clear();
-                // Optional: move focus to groups explicitly
                 self.focus = Focus::Groups;
                 return Ok(());
             }
 
-            // ESC cancels editing
+            // ESC cancels group search or filter editing
             KeyCode::Esc => {
                 if self.group_search_active {
                     self.group_search_active = false;
@@ -150,14 +149,13 @@ impl App {
                 self.editing = false;
             }
 
-            // While group search is active: handle text editing
+            // While group search is active: handle its input
             KeyCode::Backspace if self.group_search_active => {
                 self.group_search_input.pop();
                 self.apply_group_search_filter();
                 return Ok(());
             }
             KeyCode::Char(c) if self.group_search_active => {
-                // Avoid treating '/' as part of the query if you don’t want that
                 if !c.is_control() {
                     self.group_search_input.push(c);
                     self.apply_group_search_filter();
@@ -165,20 +163,29 @@ impl App {
                 return Ok(());
             }
 
-            // Confirm search with Enter (optional: exit search mode but keep filtered groups)
+            // Confirm search with Enter: exit search mode but keep filtered groups
             KeyCode::Enter if self.group_search_active => {
                 self.group_search_active = false;
-                // keep the filtered groups & selection
                 return Ok(());
             }
 
-            // Enter: start/stop editing, or activate Search
+            // === Filter editing logic (restored) ===
+
+            // While editing filter fields: route text input there
+            KeyCode::Backspace if self.editing => {
+                self.active_field_mut().pop();
+            }
+            KeyCode::Char(c) if self.editing => {
+                self.active_field_mut().push(c);
+            }
+
+            // Enter: start/stop editing, or activate Search button
             KeyCode::Enter => {
                 if self.focus == Focus::Filter
                     && self.filter_field == FilterField::Search
                     && !self.editing
                 {
-                    self.start_search(); // stub for now
+                    self.start_search();
                 } else {
                     self.editing = !self.editing;
                 }
