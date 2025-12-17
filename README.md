@@ -4,7 +4,7 @@
 **Lumberjack** is a terminal UI (TUI) for browsing and searching **AWS CloudWatch Logs**.
 
 It lets you:
-- Browse log groups
+- Browse and fuzzy-search log groups
 - Filter logs by time range and pattern
 - Stream and scroll results
 - Pretty-print embedded JSON logs
@@ -16,7 +16,7 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
 
 ## Features
 
-- 📂 Log group browser (scrollable)
+- 📂 Log group browser (scrollable, with `/` fuzzy search)
 - 🔍 Filter logs by:
   - Start time
   - End time
@@ -51,3 +51,14 @@ cargo build --release
 ```bash
 cargo run -- --profile=<aws-profile> --region=<aws-region>
 ```
+
+---
+
+## Keybindings
+
+- `Tab` – Switch between Groups / Filter / Results
+- `/` – Fuzzy-search log groups (when Groups pane is focused)
+- `↑` / `↓` – Move selection / scroll
+- `Enter` – Edit filter field / run search
+- `Esc` – Cancel editing or group search
+- `q` – Quit (except while editing or in group search)
