@@ -1,5 +1,5 @@
 # 🪓 Lumberjack
-
+![Rust](https://github.com/danieloraca/lumberjack/actions/workflows/test.yml/badge.svg)
 **Lumberjack** is a terminal UI (TUI) for browsing and searching **AWS CloudWatch Logs**.
 
 It lets you:
