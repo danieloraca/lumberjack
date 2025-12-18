@@ -67,15 +67,16 @@ pub async fn fetch_log_events(
 
     let now_ms = Utc::now().timestamp_millis();
     let start_ms = if start.trim().is_empty() {
-        now_ms - 15 * 60 * 1000
+        // default: last 15m
+        now_ms - 15 * 60 * 1_000
     } else {
-        parse_rfc3339_to_ms(start)?
+        parse_relative_or_absolute_ms(start, now_ms)?
     };
 
     let end_ms = if end.trim().is_empty() {
         now_ms
     } else {
-        parse_rfc3339_to_ms(end)?
+        parse_relative_or_absolute_ms(end, now_ms)?
     };
 
     let mut out = Vec::new();
@@ -160,6 +161,55 @@ fn parse_rfc3339_to_ms(s: &str) -> Result<i64, String> {
          - RFC3339: 2025-12-11T10:00:00Z\n\
          - Simple:  2025-12-11 10:00:00"
     ))
+}
+
+fn parse_relative_or_absolute_ms(s: &str, now_ms: i64) -> Result<i64, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err("empty time string".to_string());
+    }
+
+    // Relative syntax: -5m, -1h, -2d, -30s
+    // Accept: optional leading '-', then number, then unit
+    if trimmed.starts_with('-') {
+        // strip leading '-'
+        let rest = &trimmed[1..];
+        // split into numeric prefix and unit suffix
+        let (num_str, unit) = rest
+            .chars()
+            .enumerate()
+            .find(|(_, c)| !c.is_ascii_digit())
+            .map(|(idx, _)| rest.split_at(idx))
+            .unwrap_or((rest, ""));
+
+        if num_str.is_empty() {
+            return Err(format!("Invalid relative time '{s}': missing number"));
+        }
+        let value: i64 = num_str
+            .parse()
+            .map_err(|_| format!("Invalid relative time '{s}': '{}' is not a number", num_str))?;
+
+        let multiplier_ms: i64 = match unit {
+            "s" | "" => 1_000,           // seconds (or default to seconds if no unit)
+            "m" => 60 * 1_000,           // minutes
+            "h" => 60 * 60 * 1_000,      // hours
+            "d" => 24 * 60 * 60 * 1_000, // days
+            _ => {
+                return Err(format!(
+                    "Invalid relative time unit in '{s}'. Use one of: s, m, h, d"
+                ));
+            }
+        };
+
+        let delta = value
+            .checked_mul(multiplier_ms)
+            .ok_or_else(|| format!("Relative time '{s}' is too large"))?;
+
+        return Ok(now_ms - delta);
+    }
+
+    // Fallback: treat as absolute datetime (RFC3339 or "YYYY-MM-DD HH:MM:SS")
+    parse_rfc3339_to_ms(trimmed)
 }
 
 fn pretty_json_if_possible(s: &str) -> Option<String> {
@@ -408,5 +458,58 @@ mod tests {
     fn normalize_filter_pattern_empty_or_whitespace() {
         assert_eq!(normalize_filter_pattern(""), "");
         assert_eq!(normalize_filter_pattern("   "), "");
+    }
+
+    #[test]
+    fn parse_relative_time_minutes() {
+        let now = Utc.with_ymd_and_hms(2025, 1, 1, 0, 10, 0).single().unwrap();
+        let now_ms = now.timestamp_millis();
+
+        let ms = parse_relative_or_absolute_ms("-5m", now_ms).expect("should parse -5m");
+        let dt = Utc.timestamp_millis_opt(ms).single().unwrap();
+
+        assert_eq!(dt.year(), 2025);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 1);
+        assert_eq!(dt.hour(), 0);
+        assert_eq!(dt.minute(), 5);
+        assert_eq!(dt.second(), 0);
+    }
+
+    #[test]
+    fn parse_relative_time_hours() {
+        let now = Utc.with_ymd_and_hms(2025, 1, 1, 3, 0, 0).single().unwrap();
+        let now_ms = now.timestamp_millis();
+
+        let ms = parse_relative_or_absolute_ms("-1h", now_ms).expect("should parse -1h");
+        let dt = Utc.timestamp_millis_opt(ms).single().unwrap();
+
+        assert_eq!(dt.hour(), 2);
+    }
+
+    #[test]
+    fn parse_relative_time_days() {
+        let now = Utc.with_ymd_and_hms(2025, 1, 2, 0, 0, 0).single().unwrap();
+        let now_ms = now.timestamp_millis();
+
+        let ms = parse_relative_or_absolute_ms("-1d", now_ms).expect("should parse -1d");
+        let dt = Utc.timestamp_millis_opt(ms).single().unwrap();
+
+        assert_eq!(dt.year(), 2025);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 1);
+    }
+
+    #[test]
+    fn parse_relative_time_falls_back_to_absolute() {
+        let input = "2025-12-11T10:00:00Z";
+        let now_ms = 0; // doesn't matter; absolute path ignores it
+        let ms = parse_relative_or_absolute_ms(input, now_ms).expect("should parse absolute");
+        let dt = Utc.timestamp_millis_opt(ms).single().unwrap();
+
+        assert_eq!(dt.year(), 2025);
+        assert_eq!(dt.month(), 12);
+        assert_eq!(dt.day(), 11);
+        assert_eq!(dt.hour(), 10);
     }
 }
