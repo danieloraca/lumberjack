@@ -21,6 +21,7 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - Start time
   - End time
   - Filter pattern
+  - JSON fields via shorthand (e.g. `routing_id=123` → `{ $.routing_id = 123 }`)
 - ⏱ Time parsing with friendly input
 - 🧾 Pretty-printed JSON output
 - 📜 Scrollable results with scrollbar

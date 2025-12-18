@@ -180,7 +180,7 @@ fn normalize_filter_pattern(raw: &str) -> String {
     }
 
     // If it already looks like a CloudWatch filter expression, don't touch it.
-    // Examples: "{ $.routing_id = 281 }", "ERROR", "[level = \"error\"]"
+    // Examples: "{ $.routing_id = 123 }", "ERROR", "[level = \"error\"]"
     if trimmed.starts_with('{')
         || trimmed.starts_with('[')
         || trimmed.contains(' ')
@@ -190,8 +190,8 @@ fn normalize_filter_pattern(raw: &str) -> String {
     }
 
     // Very simple "field=value" or "field:value" shorthand:
-    //   routing_id=281 -> { $.routing_id = 281 }
-    //   routing_id:281 -> { $.routing_id = 281 }
+    //   routing_id=123 -> { $.routing_id = 123 }
+    //   routing_id:123 -> { $.routing_id = 123 }
     if let Some((field, value)) = trimmed.split_once('=') {
         let field = field.trim();
         let value = value.trim();
@@ -359,23 +359,23 @@ mod tests {
 
     #[test]
     fn normalize_filter_pattern_leaves_full_syntax_untouched() {
-        let raw = "{ $.routing_id = 281 }";
+        let raw = "{ $.routing_id = 123 }";
         let norm = normalize_filter_pattern(raw);
-        assert_eq!(norm, "{ $.routing_id = 281 }");
+        assert_eq!(norm, "{ $.routing_id = 123 }");
     }
 
     #[test]
     fn normalize_filter_pattern_parses_equals_shorthand() {
-        let raw = "routing_id=281";
+        let raw = "routing_id=123";
         let norm = normalize_filter_pattern(raw);
-        assert_eq!(norm, "{ $.routing_id = 281 }");
+        assert_eq!(norm, "{ $.routing_id = 123 }");
     }
 
     #[test]
     fn normalize_filter_pattern_parses_colon_shorthand() {
-        let raw = "routing_id:281";
+        let raw = "routing_id:123";
         let norm = normalize_filter_pattern(raw);
-        assert_eq!(norm, "{ $.routing_id = 281 }");
+        assert_eq!(norm, "{ $.routing_id = 123 }");
     }
 
     #[test]

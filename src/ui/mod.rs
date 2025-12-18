@@ -82,7 +82,7 @@ impl Widget for &App {
             .style(footer_style)
             .render(footer[0], buf);
 
-        Line::from("v0.1.0")
+        Line::from("v0.1.1")
             .right_aligned()
             .style(footer_style)
             .render(footer[1], buf);
