@@ -81,6 +81,9 @@ pub async fn fetch_log_events(
     let mut out = Vec::new();
     let mut next_token: Option<String> = None;
 
+    // normalize the pattern once up-front
+    let normalized_pattern = normalize_filter_pattern(pattern);
+
     loop {
         let mut req = client
             .filter_log_events()
@@ -89,8 +92,8 @@ pub async fn fetch_log_events(
             .end_time(end_ms)
             .interleaved(true);
 
-        if !pattern.trim().is_empty() {
-            req = req.filter_pattern(pattern);
+        if !normalized_pattern.trim().is_empty() {
+            req = req.filter_pattern(&normalized_pattern);
         }
         if let Some(tok) = &next_token {
             req = req.next_token(tok);
@@ -168,6 +171,43 @@ fn pretty_json_if_possible(s: &str) -> Option<String> {
 
     let v: serde_json::Value = serde_json::from_str(trimmed).ok()?;
     serde_json::to_string_pretty(&v).ok()
+}
+
+fn normalize_filter_pattern(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    // If it already looks like a CloudWatch filter expression, don't touch it.
+    // Examples: "{ $.routing_id = 281 }", "ERROR", "[level = \"error\"]"
+    if trimmed.starts_with('{')
+        || trimmed.starts_with('[')
+        || trimmed.contains(' ')
+        || trimmed.contains('$')
+    {
+        return trimmed.to_string();
+    }
+
+    // Very simple "field=value" or "field:value" shorthand:
+    //   routing_id=281 -> { $.routing_id = 281 }
+    //   routing_id:281 -> { $.routing_id = 281 }
+    if let Some((field, value)) = trimmed.split_once('=') {
+        let field = field.trim();
+        let value = value.trim();
+        if !field.is_empty() && !value.is_empty() {
+            return format!("{{ $.{} = {} }}", field, value);
+        }
+    } else if let Some((field, value)) = trimmed.split_once(':') {
+        let field = field.trim();
+        let value = value.trim();
+        if !field.is_empty() && !value.is_empty() {
+            return format!("{{ $.{} = {} }}", field, value);
+        }
+    }
+
+    // Fallback: leave as-is, so arbitrary patterns (e.g. "ERROR") still work.
+    trimmed.to_string()
 }
 
 #[cfg(test)]
@@ -315,5 +355,33 @@ mod tests {
             out.ends_with("INFO {\"a\":1"),
             "should fall back to 'ts message', got: {out}"
         );
+    }
+
+    #[test]
+    fn normalize_filter_pattern_leaves_full_syntax_untouched() {
+        let raw = "{ $.routing_id = 281 }";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "{ $.routing_id = 281 }");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_parses_equals_shorthand() {
+        let raw = "routing_id=281";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "{ $.routing_id = 281 }");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_parses_colon_shorthand() {
+        let raw = "routing_id:281";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "{ $.routing_id = 281 }");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_leaves_simple_term() {
+        let raw = "ERROR";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "ERROR");
     }
 }
