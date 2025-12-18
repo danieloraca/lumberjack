@@ -72,7 +72,13 @@ impl Widget for &App {
             .style(header_style)
             .render(header[1], buf);
 
-        Line::from("Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit")
+        let footer_left = if self.group_search_active {
+            format!("Search groups: {}", self.group_search_input)
+        } else {
+            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit".to_string()
+        };
+
+        Line::from(footer_left)
             .style(footer_style)
             .render(footer[0], buf);
 
@@ -489,6 +495,24 @@ mod ui_tests {
         assert!(
             buffer_contains_text(&buf, "Searching..."),
             "expected Searching... message"
+        );
+    }
+
+    #[test]
+    fn shows_group_search_prompt_and_input_in_footer() {
+        let mut app = make_app();
+        app.focus = Focus::Groups;
+        app.group_search_active = true;
+        app.group_search_input = "api".to_string();
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            buffer_contains_text(&buf, "Search groups: api"),
+            "expected footer to show 'Search groups: api'"
         );
     }
 }
