@@ -358,3 +358,137 @@ impl Widget for &App {
             );
     }
 }
+
+#[cfg(test)]
+mod ui_tests {
+    use super::*;
+    use ratatui::{buffer::Buffer, layout::Rect};
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    fn make_app() -> App {
+        let groups_owned = vec!["g1".to_string(), "g2".to_string()];
+        let (tx, rx) = mpsc::channel();
+
+        App {
+            app_title: "lumberjack".to_string(),
+            exit: false,
+            lines: vec![],
+
+            all_groups: groups_owned.clone(),
+            groups: groups_owned,
+            selected_group: 0,
+            groups_scroll: 0,
+
+            profile: "test".to_string(),
+            region: "eu-west-1".to_string(),
+            focus: Focus::Filter,
+
+            filter_start: "".to_string(),
+            filter_end: "".to_string(),
+            filter_query: "".to_string(),
+            filter_field: FilterField::Query,
+            editing: false,
+            cursor_on: true,
+            last_blink: Instant::now(),
+
+            group_search_active: false,
+            group_search_input: "".to_string(),
+
+            search_tx: tx,
+            search_rx: rx,
+            searching: false,
+            dots: 0,
+            last_dots: Instant::now(),
+            results_scroll: 0,
+        }
+    }
+
+    fn buffer_contains_symbol(buf: &Buffer, sym: &str) -> bool {
+        buf.content().iter().any(|c| c.symbol() == sym)
+    }
+
+    fn buffer_contains_text(buf: &Buffer, needle: &str) -> bool {
+        // crude but works: join all symbols and search
+        let screen: String = buf
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<Vec<_>>()
+            .join("");
+        screen.contains(needle)
+    }
+
+    #[test]
+    fn draws_cursor_when_editing_active_text_field() {
+        let mut app = make_app();
+        app.focus = Focus::Filter;
+        app.editing = true;
+        app.cursor_on = true;
+        app.filter_field = FilterField::Query;
+        app.filter_query = "abc".to_string();
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(buffer_contains_symbol(&buf, "▏"), "expected cursor ▏");
+    }
+
+    #[test]
+    fn does_not_draw_cursor_when_not_editing() {
+        let mut app = make_app();
+        app.focus = Focus::Filter;
+        app.editing = false;
+        app.cursor_on = true;
+        app.filter_field = FilterField::Query;
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            !buffer_contains_symbol(&buf, "▏"),
+            "cursor should not be drawn when not editing"
+        );
+    }
+
+    #[test]
+    fn does_not_draw_cursor_on_search_button() {
+        let mut app = make_app();
+        app.focus = Focus::Filter;
+        app.editing = true;
+        app.cursor_on = true;
+        app.filter_field = FilterField::Search;
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            !buffer_contains_symbol(&buf, "▏"),
+            "cursor should not be drawn when Search is selected"
+        );
+    }
+
+    #[test]
+    fn shows_searching_message_when_searching_and_no_lines() {
+        let mut app = make_app();
+        app.searching = true;
+        app.dots = 3;
+        app.lines.clear(); // must be empty to trigger the early-return path
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            buffer_contains_text(&buf, "Searching..."),
+            "expected Searching... message"
+        );
+    }
+}
