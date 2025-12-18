@@ -14,7 +14,7 @@ pub async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>
         .or_default_provider()
         .or_else(Region::new("eu-west-1"));
 
-    let cfg = aws_config::from_env()
+    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(region_provider)
         .profile_name(profile)
         .load()
@@ -57,7 +57,7 @@ pub async fn fetch_log_events(
     end: &str,
     pattern: &str,
 ) -> Result<Vec<String>, String> {
-    let cfg = aws_config::from_env()
+    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(Region::new(region.to_string()))
         .profile_name(profile)
         .load()
@@ -89,8 +89,7 @@ pub async fn fetch_log_events(
             .filter_log_events()
             .log_group_name(log_group)
             .start_time(start_ms)
-            .end_time(end_ms)
-            .interleaved(true);
+            .end_time(end_ms);
 
         if !normalized_pattern.trim().is_empty() {
             req = req.filter_pattern(&normalized_pattern);
@@ -152,7 +151,7 @@ fn parse_rfc3339_to_ms(s: &str) -> Result<i64, String> {
     }
 
     if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        let dt = DateTime::<Utc>::from_utc(naive, Utc);
+        let dt = naive.and_utc();
         return Ok(dt.timestamp_millis());
     }
 
@@ -383,5 +382,31 @@ mod tests {
         let raw = "ERROR";
         let norm = normalize_filter_pattern(raw);
         assert_eq!(norm, "ERROR");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_with_string_value() {
+        let raw = "level:error";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "{ $.level = error }");
+    }
+
+    #[test]
+    fn format_log_event_preserves_newlines_in_message() {
+        let ev = SimpleLogEvent {
+            timestamp_ms: 0,
+            message: "line1\nline2\nline3",
+        };
+
+        let out = format_log_event(&ev);
+        assert!(out.contains("line1"));
+        assert!(out.contains("line2"));
+        assert!(out.contains("line3"));
+    }
+
+    #[test]
+    fn normalize_filter_pattern_empty_or_whitespace() {
+        assert_eq!(normalize_filter_pattern(""), "");
+        assert_eq!(normalize_filter_pattern("   "), "");
     }
 }

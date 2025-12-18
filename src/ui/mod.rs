@@ -72,17 +72,11 @@ impl Widget for &App {
             .style(header_style)
             .render(header[1], buf);
 
-        let footer_left = if self.group_search_active {
-            format!("Search groups: {}", self.group_search_input)
-        } else {
-            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit".to_string()
-        };
-
-        Line::from(footer_left)
+        Line::from("Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit")
             .style(footer_style)
             .render(footer[0], buf);
 
-        Line::from("v0.1.1")
+        Line::from("v0.1.0")
             .right_aligned()
             .style(footer_style)
             .render(footer[1], buf);
@@ -337,9 +331,10 @@ impl Widget for &App {
                 }
 
                 // draw a vertical bar cursor
-                buf.get_mut(x, y)
-                    .set_char('▏')
-                    .set_style(Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20)));
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    cell.set_char('▏')
+                        .set_style(Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20)));
+                }
             }
         }
 

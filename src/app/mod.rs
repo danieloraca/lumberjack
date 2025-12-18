@@ -246,14 +246,17 @@ impl App {
 
         // draw track
         for dy in 0..area.height {
-            buf.get_mut(x, area.y + dy)
-                .set_char('│')
-                .set_style(track_style);
+            if let Some(cell) = buf.cell_mut((x, area.y + dy)) {
+                cell.set_char('│').set_style(track_style);
+            }
         }
 
         if total <= 1 {
             // full thumb
-            buf.get_mut(x, area.y).set_char('█').set_style(thumb_style);
+            if let Some(cell) = buf.cell_mut((x, area.y)) {
+                cell.set_char('█').set_style(thumb_style);
+            }
+
             return;
         }
 
@@ -276,7 +279,9 @@ impl App {
 
         for i in 0..thumb_h {
             let y = area.y + (thumb_top + i) as u16;
-            buf.get_mut(x, y).set_char('█').set_style(thumb_style);
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.set_char('█').set_style(thumb_style);
+            }
         }
     }
 
