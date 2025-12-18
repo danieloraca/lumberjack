@@ -63,5 +63,6 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `/` – Fuzzy-search log groups (when Groups pane is focused)
 - `↑` / `↓` – Move selection / scroll
 - `Enter` – Edit filter field / run search
+- `t` – Toggle tail/stream mode for results
 - `Esc` – Cancel editing or group search
 - `q` – Quit (except while editing or in group search)

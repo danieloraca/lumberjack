@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use std::{env, io};
 
@@ -58,6 +60,9 @@ fn main() -> io::Result<()> {
         dots: 0,
         last_dots: Instant::now(),
         results_scroll: 0,
+
+        tail_mode: false,
+        tail_stop: Arc::new(AtomicBool::new(false)),
     };
 
     let app_result = app.run(&mut terminal);

@@ -56,7 +56,7 @@ pub async fn fetch_log_events(
     start: &str,
     end: &str,
     pattern: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, Option<i64>), String> {
     let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(Region::new(region.to_string()))
         .profile_name(profile)
@@ -80,6 +80,7 @@ pub async fn fetch_log_events(
     };
 
     let mut out = Vec::new();
+    let mut last_ts: Option<i64> = None;
     let mut next_token: Option<String> = None;
 
     // normalize the pattern once up-front
@@ -103,6 +104,14 @@ pub async fn fetch_log_events(
 
         for ev in resp.events() {
             let ts = ev.timestamp().unwrap_or(0);
+
+            if let Some(current) = last_ts {
+                if ts > current {
+                    last_ts = Some(ts);
+                }
+            } else {
+                last_ts = Some(ts);
+            }
             let msg = ev.message().unwrap_or("");
 
             let simple = SimpleLogEvent {
@@ -120,7 +129,7 @@ pub async fn fetch_log_events(
         next_token = new_token;
     }
 
-    Ok(out)
+    Ok((out, last_ts))
 }
 
 fn format_log_event(ev: &SimpleLogEvent<'_>) -> String {

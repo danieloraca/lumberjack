@@ -75,14 +75,21 @@ impl Widget for &App {
         let footer_left = if self.group_search_active {
             format!("Search groups: {}", self.group_search_input)
         } else {
-            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  Esc Cancel  q Quit".to_string()
+            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  t Tail  Esc Cancel  q Quit".to_string()
+        };
+
+        // Tail indicator on the right, next to version
+        let footer_right = if self.tail_mode {
+            "[Tailing] v0.2.0".to_string()
+        } else {
+            "v0.2.0".to_string()
         };
 
         Line::from(footer_left)
             .style(footer_style)
             .render(footer[0], buf);
 
-        Line::from("v0.1.2")
+        Line::from(footer_right)
             .right_aligned()
             .style(footer_style)
             .render(footer[1], buf);
@@ -369,7 +376,8 @@ impl Widget for &App {
 mod ui_tests {
     use super::*;
     use ratatui::{buffer::Buffer, layout::Rect};
-    use std::sync::mpsc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, mpsc};
     use std::time::Instant;
 
     fn make_app() -> App {
@@ -407,6 +415,9 @@ mod ui_tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+
+            tail_mode: false,
+            tail_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -513,6 +524,22 @@ mod ui_tests {
         assert!(
             buffer_contains_text(&buf, "Search groups: api"),
             "expected footer to show 'Search groups: api'"
+        );
+    }
+
+    #[test]
+    fn shows_tail_indicator_in_footer_when_tail_mode_on() {
+        let mut app = make_app();
+        app.tail_mode = true;
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            buffer_contains_text(&buf, "[Tailing]"),
+            "expected footer to show '[Tailing]' when tail_mode is on"
         );
     }
 }

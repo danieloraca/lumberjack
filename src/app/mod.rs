@@ -1,7 +1,9 @@
 use std::io;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::prelude::Rect;
@@ -9,6 +11,9 @@ use ratatui::style::{Color, Style};
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::aws::fetch_log_events;
+
+// use std::sync::Arc;
+// use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Focus {
@@ -56,6 +61,9 @@ pub struct App {
     pub dots: usize,
     pub last_dots: Instant,
     pub results_scroll: usize,
+
+    pub tail_mode: bool,
+    pub tail_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl App {
@@ -119,7 +127,10 @@ impl App {
 
         match key_event.code {
             // q should NOT quit while editing or while group search is active
-            KeyCode::Char('q') if !self.editing && !self.group_search_active => self.exit = true,
+            KeyCode::Char('q') if !self.editing && !self.group_search_active => {
+                self.tail_stop.store(true, Ordering::Relaxed);
+                self.exit = true;
+            }
 
             // Switch focus between panes
             KeyCode::Tab if !self.editing => {
@@ -204,6 +215,16 @@ impl App {
                 Focus::Filter => self.filter_next(),
                 Focus::Results => self.results_down(),
             },
+
+            KeyCode::Char('t') if !self.editing && !self.group_search_active => {
+                self.tail_mode = !self.tail_mode;
+
+                // When turning tail off, signal any running tail loop to stop
+                if !self.tail_mode {
+                    self.tail_stop
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
 
             _ => {}
         }
@@ -368,6 +389,7 @@ impl App {
         self.editing = false;
         self.lines.clear(); // optional
         self.results_scroll = 0;
+        self.tail_stop.store(false, Ordering::Relaxed);
 
         let group = match self.groups.get(self.selected_group) {
             Some(g) => g.clone(),
@@ -385,6 +407,9 @@ impl App {
         // show immediate feedback
         let _ = tx.send(format!("Searching {} ...", group));
 
+        let tail_mode = self.tail_mode;
+        let tail_stop = self.tail_stop.clone();
+
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
             let res = rt.block_on(fetch_log_events(
@@ -396,16 +421,74 @@ impl App {
                 pattern.as_str(),
             ));
 
+            let mut last_ts: Option<i64> = None;
+
             match res {
-                Ok(lines) => {
+                Ok((lines, last)) => {
                     let _ = tx.send(format!("--- {} results ---", lines.len()));
                     for line in lines {
                         let _ = tx.send(line);
                     }
+                    last_ts = last;
                 }
                 Err(e) => {
                     let _ = tx.send(format!("[search error] {e}"));
                 }
+            }
+
+            // If not tailing, we're done
+            if !tail_mode {
+                let _ = tx.send("__SEARCH_DONE__".to_string());
+                return;
+            }
+
+            // Tail mode: repeatedly fetch new events
+            loop {
+                if tail_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    break;
+                }
+
+                // Build new time window: from last_ts+1 (or start) to now
+                let tail_start = if let Some(ts) = last_ts {
+                    if let Some(dt) = chrono::DateTime::<Utc>::from_timestamp_millis(ts + 1) {
+                        dt.to_rfc3339()
+                    } else {
+                        start.clone() // fallback
+                    }
+                } else {
+                    start.clone()
+                };
+
+                // Empty end = "now" (fetch_log_events treats empty end as now)
+                let tail_end = String::new();
+
+                let res = rt.block_on(fetch_log_events(
+                    &region,
+                    &profile,
+                    &group,
+                    tail_start.as_str(),
+                    tail_end.as_str(),
+                    pattern.as_str(),
+                ));
+
+                match res {
+                    Ok((lines, new_last)) => {
+                        // Don’t re-print a header every poll; just append lines
+                        for line in lines {
+                            let _ = tx.send(line);
+                        }
+                        if let Some(ts) = new_last {
+                            last_ts = Some(last_ts.map_or(ts, |prev| prev.max(ts)));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(format!("[tail error] {e}"));
+                        // optional: break on repeated errors
+                    }
+                }
+
+                // Simple tail interval
+                std::thread::sleep(std::time::Duration::from_secs(3));
             }
 
             let _ = tx.send("__SEARCH_DONE__".to_string());
@@ -506,6 +589,9 @@ mod tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+
+            tail_mode: false,
+            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
