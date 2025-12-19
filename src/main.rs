@@ -10,10 +10,11 @@ mod ui;
 use app::{App, FilterField, Focus};
 use aws::fetch_log_groups;
 
+const APP_TITLE: &str = "Lumberjack";
+
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
 
-    let app_title: String = "Lumberjack".to_string();
     let region = env::args()
         .find_map(|arg| arg.strip_prefix("--region=").map(String::from))
         .unwrap_or_else(|| "eu-west-1".to_string());
@@ -33,7 +34,7 @@ fn main() -> io::Result<()> {
     let (search_tx, search_rx) = std::sync::mpsc::channel::<String>();
 
     let mut app = App {
-        app_title,
+        app_title: APP_TITLE.to_string(),
         exit: false,
         lines: Vec::new(),
         all_groups: groups.clone(),

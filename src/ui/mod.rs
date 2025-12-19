@@ -80,9 +80,9 @@ impl Widget for &App {
 
         // Tail indicator on the right, next to version
         let footer_right = if self.tail_mode {
-            "[Tailing] v0.2.0".to_string()
+            format!("[Tailing] {}", env!("CARGO_PKG_VERSION"))
         } else {
-            "v0.2.0".to_string()
+            format!("{}", env!("CARGO_PKG_VERSION"))
         };
 
         Line::from(footer_left)
