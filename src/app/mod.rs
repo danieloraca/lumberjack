@@ -226,6 +226,28 @@ impl App {
                 }
             }
 
+            // Quick time presets (Filter pane, not editing)
+            KeyCode::Char('1')
+                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
+            {
+                self.apply_time_preset("-5m");
+            }
+            KeyCode::Char('2')
+                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
+            {
+                self.apply_time_preset("-15m");
+            }
+            KeyCode::Char('3')
+                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
+            {
+                self.apply_time_preset("-1h");
+            }
+            KeyCode::Char('4')
+                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
+            {
+                self.apply_time_preset("-24h");
+            }
+
             _ => {}
         }
 
@@ -548,6 +570,16 @@ impl App {
         self.selected_group = 0;
         self.groups_scroll = 0;
     }
+
+    fn apply_time_preset(&mut self, start: &str) {
+        self.filter_start = start.to_string();
+        self.filter_end.clear(); // empty = "now"
+
+        self.filter_field = FilterField::Query;
+
+        // Ensure we're not in editing mode
+        self.editing = false;
+    }
 }
 
 #[cfg(test)]
@@ -678,5 +710,22 @@ mod tests {
         assert_eq!(app.groups.len(), 2);
         assert_eq!(app.groups[0], "/aws/lambda/api");
         assert_eq!(app.groups[1], "/aws/lambda/worker");
+    }
+
+    #[test]
+    fn apply_time_preset_sets_start_and_clears_end() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+
+        app.filter_start = "2025-12-11T10:00:00Z".to_string();
+        app.filter_end = "2025-12-11T11:00:00Z".to_string();
+        app.filter_field = FilterField::Start;
+        app.editing = true;
+
+        app.apply_time_preset("-15m");
+
+        assert_eq!(app.filter_start, "-15m");
+        assert_eq!(app.filter_end, "");
+        assert_eq!(app.filter_field, FilterField::Query);
+        assert!(!app.editing);
     }
 }

@@ -63,6 +63,7 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `/` – Fuzzy-search log groups (when Groups pane is focused)
 - `↑` / `↓` – Move selection / scroll
 - `Enter` – Edit filter field / run search
+- `1` / `2` / `3` / `4` – Quick time presets for **Start** (sets Start to `-5m` / `-15m` / `-1h` / `-24h`, and clears End to “now”)
 - `t` – Toggle tail/stream mode for results
 - `Esc` – Cancel editing or group search
 - `q` – Quit (except while editing or in group search)

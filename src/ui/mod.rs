@@ -310,6 +310,24 @@ impl Widget for &App {
                 },
                 buf,
             );
+
+        // Presets hint (non-interactive)
+        Line::from("Presets: 1=-5m  2=-15m  3=-1h  4=-24h")
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(120, 120, 120))
+                    .bg(Color::Rgb(20, 20, 20)),
+            )
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
+
         row_y += 1;
 
         // ---- fake blinking cursor inside the active filter field ----
@@ -540,6 +558,22 @@ mod ui_tests {
         assert!(
             buffer_contains_text(&buf, "[Tailing]"),
             "expected footer to show '[Tailing]' when tail_mode is on"
+        );
+    }
+
+    #[test]
+    fn shows_time_presets_hint_in_filter_pane() {
+        let mut app = make_app();
+        app.focus = Focus::Filter;
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        assert!(
+            buffer_contains_text(&buf, "Presets:"),
+            "expected presets hint to be rendered in filter pane"
         );
     }
 }
