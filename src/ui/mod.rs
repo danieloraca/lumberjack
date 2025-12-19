@@ -72,10 +72,13 @@ impl Widget for &App {
             .style(header_style)
             .render(header[1], buf);
 
-        let footer_left = if self.group_search_active {
+        let footer_left = if let Some(msg) = &self.status_message {
+            msg.clone()
+        } else if self.group_search_active {
             format!("Search groups: {}", self.group_search_input)
         } else {
-            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  t Tail  Esc Cancel  q Quit".to_string()
+            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  t Tail  y Copy  Esc Cancel  q Quit"
+                .to_string()
         };
 
         // Tail indicator on the right, next to version
@@ -445,6 +448,8 @@ mod ui_tests {
 
             tail_mode: false,
             tail_stop: Arc::new(AtomicBool::new(false)),
+            status_message: None,
+            status_set_at: None,
         }
     }
 

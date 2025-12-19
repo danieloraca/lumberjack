@@ -64,6 +64,8 @@ fn main() -> io::Result<()> {
 
         tail_mode: false,
         tail_stop: Arc::new(AtomicBool::new(false)),
+        status_message: None,
+        status_set_at: None,
     };
 
     let app_result = app.run(&mut terminal);

@@ -61,6 +61,9 @@ pub struct App {
 
     pub tail_mode: bool,
     pub tail_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+
+    pub status_message: Option<String>,
+    pub status_set_at: Option<Instant>,
 }
 
 impl App {
@@ -98,6 +101,9 @@ impl App {
                 self.dots = (self.dots + 1) % 7;
                 self.last_dots = Instant::now();
             }
+
+            // Clear transient status messages after 2 seconds
+            self.maybe_clear_status();
 
             terminal.draw(|frame| self.draw(frame))?;
 
@@ -585,16 +591,27 @@ impl App {
         self.editing = false;
     }
 
-    fn copy_results_to_clipboard(&self) {
+    fn copy_results_to_clipboard(&mut self) {
         let text = self.results_text();
-
         if text.trim().is_empty() {
-            // Nothing to copy; you could set a status message here if you introduce one.
             return;
         }
 
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(text);
+            if clipboard.set_text(text.clone()).is_ok() {
+                self.status_message =
+                    Some(format!("Copied {} lines to clipboard", self.lines.len()));
+                self.status_set_at = Some(Instant::now());
+            }
+        }
+    }
+
+    fn maybe_clear_status(&mut self) {
+        if let Some(set_at) = self.status_set_at {
+            if set_at.elapsed() >= Duration::from_secs(2) {
+                self.status_message = None;
+                self.status_set_at = None;
+            }
         }
     }
 
@@ -645,6 +662,8 @@ mod tests {
 
             tail_mode: false,
             tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            status_message: None,
+            status_set_at: None,
         }
     }
 
@@ -769,7 +788,6 @@ mod tests {
         app.lines = vec!["line1a\nline1b".to_string(), "line2".to_string()];
 
         let text = app.results_text();
-        // Outer join adds one newline between entries
         assert_eq!(text, "line1a\nline1b\nline2");
     }
 
@@ -778,9 +796,48 @@ mod tests {
         let mut app = app_with_groups(vec!["/aws/lambda/api"]);
         app.lines.clear();
 
-        // This should not panic or try to write anything meaningful.
-        // We can't reliably assert on the OS clipboard in a unit test, but
-        // we at least verify that calling it with empty lines doesn't crash.
         app.copy_results_to_clipboard();
+    }
+
+    #[test]
+    fn copy_results_sets_status_message_and_timestamp() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+        app.lines = vec!["one".to_string(), "two".to_string()];
+
+        app.copy_results_to_clipboard();
+
+        assert!(
+            app.status_message
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Copied "),
+            "expected status_message to start with 'Copied ', got: {:?}",
+            app.status_message
+        );
+        assert!(
+            app.status_set_at.is_some(),
+            "expected status_set_at to be set after copy_results_to_clipboard"
+        );
+    }
+
+    #[test]
+    fn maybe_clear_status_clears_after_timeout() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+        app.status_message = Some("test".to_string());
+
+        // Simulate a status set in the past by manually setting status_set_at
+        // to an Instant that is guaranteed to have "elapsed" >= 2s.
+        app.status_set_at = Some(Instant::now() - Duration::from_secs(3));
+
+        app.maybe_clear_status();
+
+        assert!(
+            app.status_message.is_none(),
+            "expected status_message to be cleared after timeout"
+        );
+        assert!(
+            app.status_set_at.is_none(),
+            "expected status_set_at to be cleared after timeout"
+        );
     }
 }
