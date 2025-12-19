@@ -66,4 +66,5 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `1` / `2` / `3` / `4` – Quick time presets for **Start** (sets Start to `-5m` / `-15m` / `-1h` / `-24h`, and clears End to “now”)
 - `t` – Toggle tail/stream mode for results
 - `Esc` – Cancel editing or group search
+- `y` – Copy all Results to clipboard (when Results pane is focused)
 - `q` – Quit (except while editing or in group search)

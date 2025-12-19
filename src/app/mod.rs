@@ -12,9 +12,6 @@ use ratatui::{DefaultTerminal, Frame};
 
 use crate::aws::fetch_log_events;
 
-// use std::sync::Arc;
-// use std::sync::atomic::{AtomicBool, Ordering};
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Focus {
     Groups,
@@ -215,6 +212,10 @@ impl App {
                 Focus::Filter => self.filter_next(),
                 Focus::Results => self.results_down(),
             },
+
+            KeyCode::Char('y') if !self.editing && self.focus == Focus::Results => {
+                self.copy_results_to_clipboard();
+            }
 
             KeyCode::Char('t') if !self.editing && !self.group_search_active => {
                 self.tail_mode = !self.tail_mode;
@@ -583,6 +584,23 @@ impl App {
         // Ensure we're not in editing mode
         self.editing = false;
     }
+
+    fn copy_results_to_clipboard(&self) {
+        let text = self.results_text();
+
+        if text.trim().is_empty() {
+            // Nothing to copy; you could set a status message here if you introduce one.
+            return;
+        }
+
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(text);
+        }
+    }
+
+    fn results_text(&self) -> String {
+        self.lines.join("\n")
+    }
 }
 
 #[cfg(test)]
@@ -730,5 +748,39 @@ mod tests {
         assert_eq!(app.filter_end, "");
         assert_eq!(app.filter_field, FilterField::Query);
         assert!(!app.editing);
+    }
+
+    #[test]
+    fn results_text_joins_lines_with_newlines() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+        app.lines = vec![
+            "line1".to_string(),
+            "line2".to_string(),
+            "line3".to_string(),
+        ];
+
+        let text = app.results_text();
+        assert_eq!(text, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn results_text_handles_embedded_newlines() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+        app.lines = vec!["line1a\nline1b".to_string(), "line2".to_string()];
+
+        let text = app.results_text();
+        // Outer join adds one newline between entries
+        assert_eq!(text, "line1a\nline1b\nline2");
+    }
+
+    #[test]
+    fn copy_results_to_clipboard_does_nothing_when_empty() {
+        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
+        app.lines.clear();
+
+        // This should not panic or try to write anything meaningful.
+        // We can't reliably assert on the OS clipboard in a unit test, but
+        // we at least verify that calling it with empty lines doesn't crash.
+        app.copy_results_to_clipboard();
     }
 }
