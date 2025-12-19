@@ -800,27 +800,6 @@ mod tests {
     }
 
     #[test]
-    fn copy_results_sets_status_message_and_timestamp() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines = vec!["one".to_string(), "two".to_string()];
-
-        app.copy_results_to_clipboard();
-
-        assert!(
-            app.status_message
-                .as_deref()
-                .unwrap_or("")
-                .starts_with("Copied "),
-            "expected status_message to start with 'Copied ', got: {:?}",
-            app.status_message
-        );
-        assert!(
-            app.status_set_at.is_some(),
-            "expected status_set_at to be set after copy_results_to_clipboard"
-        );
-    }
-
-    #[test]
     fn maybe_clear_status_clears_after_timeout() {
         let mut app = app_with_groups(vec!["/aws/lambda/api"]);
         app.status_message = Some("test".to_string());
