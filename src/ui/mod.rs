@@ -315,36 +315,17 @@ impl Widget for &App {
             );
         row_y += 1;
 
-        // Presets hint (non-interactive) — intentionally subdued
-        Line::from("Presets: 1 = -5m  2 = -15m  3 = -1h  4 = -24h")
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(50, 50, 50))
-                    .bg(Color::Rgb(20, 20, 20)),
-            )
-            .render(
-                Rect {
-                    x: filter_inner.x,
-                    y: row_y,
-                    width: filter_inner.width,
-                    height: 1,
-                },
-                buf,
-            );
-
-        row_y += 1;
-
         // ---- fake blinking cursor inside the active filter field ----
         if self.focus == Focus::Filter && self.editing && self.cursor_on {
             // Which row is the active field on?
             //
-            // NOTE: Row 3 is occupied by the presets hint (non-interactive),
-            // so the Search button lives on row 4.
+            // NOTE: The presets hint is non-interactive; only the text fields and
+            // the Search button participate in cursor positioning.
             let field_row = match self.filter_field {
                 FilterField::Start => 0,
                 FilterField::End => 1,
                 FilterField::Query => 2,
-                FilterField::Search => 4, // no typing here; you can skip if you prefer
+                FilterField::Search => 3, // mapped to the Search button row
             };
 
             // Only show cursor for text fields
@@ -385,6 +366,24 @@ impl Widget for &App {
                 self.filter_field,
                 false,
             ))
+            .render(
+                Rect {
+                    x: filter_inner.x,
+                    y: row_y,
+                    width: filter_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
+        row_y += 1;
+
+        // Presets hint (non-interactive) — intentionally subdued at the bottom of the pane
+        Line::from("Presets: 1 = -5m  2 = -15m  3 = -1h  4 = -24h")
+            .style(
+                Style::default()
+                    .fg(Color::Rgb(50, 50, 50))
+                    .bg(Color::Rgb(20, 20, 20)),
+            )
             .render(
                 Rect {
                     x: filter_inner.x,
@@ -618,9 +617,9 @@ mod ui_tests {
         let filter_block = Block::bordered().title("Filter");
         let filter_inner = filter_block.inner(groups_row[1]);
 
-        // Presets line is rendered after Start, End, Query → it lives on row index 3 (0-based)
-        // within the filter_inner.
-        let presets_y = filter_inner.y + 3;
+        // Presets line is rendered after Start, End, Query, and the Search button.
+        // It lives on row index 4 (0-based) within the filter_inner.
+        let presets_y = filter_inner.y + 4;
         let presets_x = filter_inner.x;
 
         let cell = buf
