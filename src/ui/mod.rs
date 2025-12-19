@@ -378,17 +378,20 @@ impl Widget for &App {
         row_y += 1;
 
         // Presets hint (non-interactive) — intentionally subdued at the bottom of the pane
-        Line::from("Presets: 1 = -5m  2 = -15m  3 = -1h  4 = -24h")
-            .style(
-                Style::default()
-                    .fg(Color::Rgb(50, 50, 50))
-                    .bg(Color::Rgb(20, 20, 20)),
-            )
+        let presets_text = " Presets: 1 = -5m  2 = -15m  3 = -1h  4 = -24h ";
+
+        // Right-align the presets hint within the filter pane
+        let text_width = presets_text.len() as u16;
+        let pane_width = filter_inner.width;
+        let presets_x = filter_inner.x + pane_width.saturating_sub(text_width);
+
+        Line::from(presets_text)
+            .style(Style::default().fg(Color::Rgb(50, 50, 50)))
             .render(
                 Rect {
-                    x: filter_inner.x,
+                    x: presets_x,
                     y: row_y,
-                    width: filter_inner.width,
+                    width: text_width.min(pane_width),
                     height: 1,
                 },
                 buf,
