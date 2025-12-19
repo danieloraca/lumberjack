@@ -387,19 +387,22 @@ impl App {
     }
 
     fn filter_prev(&mut self) {
+        // Up arrow: move backward and wrap
         self.filter_field = match self.filter_field {
-            FilterField::Start => FilterField::Start,
+            FilterField::Start => FilterField::Search,
             FilterField::End => FilterField::Start,
             FilterField::Query => FilterField::End,
             FilterField::Search => FilterField::Query,
         };
     }
+
     fn filter_next(&mut self) {
+        // Down arrow: move forward and wrap
         self.filter_field = match self.filter_field {
             FilterField::Start => FilterField::End,
             FilterField::End => FilterField::Query,
             FilterField::Query => FilterField::Search,
-            FilterField::Search => FilterField::Search,
+            FilterField::Search => FilterField::Start,
         };
     }
 

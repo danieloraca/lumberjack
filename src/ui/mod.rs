@@ -82,7 +82,7 @@ impl Widget for &App {
         let footer_right = if self.tail_mode {
             format!("[Tailing] {}", env!("CARGO_PKG_VERSION"))
         } else {
-            format!("{}", env!("CARGO_PKG_VERSION"))
+            env!("CARGO_PKG_VERSION").to_string()
         };
 
         Line::from(footer_left)
@@ -110,11 +110,14 @@ impl Widget for &App {
         let inner = groups_block.inner(groups_row[0]);
         groups_block.render(groups_row[0], buf);
 
+        // Keep the filter pane background consistent so non-interactive hint rows
+        // (like Presets) can be rendered with a slightly different bg and still look correct.
+        // Using the same base bg in both focused/unfocused states avoids unexpected bg blending.
         let filter_block_style = if self.focus == Focus::Filter {
             Style::default().bg(Color::Rgb(20, 20, 20)).fg(Color::White)
         } else {
             Style::default()
-                .bg(Color::Rgb(14, 14, 14))
+                .bg(Color::Rgb(20, 20, 20))
                 .fg(Color::Rgb(140, 140, 140))
         };
 
@@ -310,12 +313,13 @@ impl Widget for &App {
                 },
                 buf,
             );
+        row_y += 1;
 
-        // Presets hint (non-interactive)
-        Line::from("Presets: 1=-5m  2=-15m  3=-1h  4=-24h")
+        // Presets hint (non-interactive) — intentionally subdued
+        Line::from("Presets: 1 = -5m  2 = -15m  3 = -1h  4 = -24h")
             .style(
                 Style::default()
-                    .fg(Color::Rgb(120, 120, 120))
+                    .fg(Color::Rgb(50, 50, 50))
                     .bg(Color::Rgb(20, 20, 20)),
             )
             .render(
@@ -333,11 +337,14 @@ impl Widget for &App {
         // ---- fake blinking cursor inside the active filter field ----
         if self.focus == Focus::Filter && self.editing && self.cursor_on {
             // Which row is the active field on?
+            //
+            // NOTE: Row 3 is occupied by the presets hint (non-interactive),
+            // so the Search button lives on row 4.
             let field_row = match self.filter_field {
                 FilterField::Start => 0,
                 FilterField::End => 1,
                 FilterField::Query => 2,
-                FilterField::Search => 3, // no typing here; you can skip if you prefer
+                FilterField::Search => 4, // no typing here; you can skip if you prefer
             };
 
             // Only show cursor for text fields
@@ -571,9 +578,66 @@ mod ui_tests {
 
         (&app).render(area, &mut buf);
 
+        // The filter pane is narrow; the hint may be truncated by layout.
+        // Assert a stable prefix rather than the full string.
         assert!(
             buffer_contains_text(&buf, "Presets:"),
             "expected presets hint to be rendered in filter pane"
+        );
+    }
+
+    #[test]
+    fn presets_hint_is_rendered_with_subdued_style() {
+        let mut app = make_app();
+        app.focus = Focus::Filter;
+
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        // Instead of searching text in the full-screen buffer (which can match the header/footer),
+        // compute the exact cell coordinates for the presets hint row inside the Filter pane.
+        //
+        // Layout mirrors the render() function:
+        // - Vertical: header(1), top row(6), results(min), footer(1)
+        // - Top row: groups 60%, filter 40%
+        let chunks = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(6),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+        let groups_row =
+            Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .split(chunks[1]);
+
+        // Filter block inner rect
+        let filter_block = Block::bordered().title("Filter");
+        let filter_inner = filter_block.inner(groups_row[1]);
+
+        // Presets line is rendered after Start, End, Query → it lives on row index 3 (0-based)
+        // within the filter_inner.
+        let presets_y = filter_inner.y + 3;
+        let presets_x = filter_inner.x;
+
+        let cell = buf
+            .cell((presets_x, presets_y))
+            .expect("expected presets cell to exist in buffer");
+        let style = cell.style();
+
+        assert_eq!(
+            style.fg,
+            Some(Color::Rgb(50, 50, 50)),
+            "expected presets hint to have subdued foreground color"
+        );
+
+        assert_eq!(
+            style.bg,
+            Some(Color::Rgb(20, 20, 20)),
+            "expected presets hint to have subdued background color"
         );
     }
 }
