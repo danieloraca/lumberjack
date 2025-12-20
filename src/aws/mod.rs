@@ -239,33 +239,45 @@ fn normalize_filter_pattern(raw: &str) -> String {
 
     // If it already looks like a CloudWatch filter expression, don't touch it.
     // Examples: "{ $.routing_id = 123 }", "ERROR", "[level = \"error\"]"
-    if trimmed.starts_with('{')
-        || trimmed.starts_with('[')
-        || trimmed.contains(' ')
-        || trimmed.contains('$')
-    {
+    if trimmed.starts_with('{') || trimmed.starts_with('[') || trimmed.contains('$') {
         return trimmed.to_string();
     }
 
-    // Very simple "field=value" or "field:value" shorthand:
-    //   routing_id=123 -> { $.routing_id = 123 }
-    //   routing_id:123 -> { $.routing_id = 123 }
-    if let Some((field, value)) = trimmed.split_once('=') {
-        let field = field.trim();
-        let value = value.trim();
-        if !field.is_empty() && !value.is_empty() {
-            return format!("{{ $.{} = {} }}", field, value);
+    // Support multiple "field=value" or "field:value" pairs separated by whitespace:
+    //   routing_id=123 task="batch-attendances"
+    //     -> { $.routing_id = 123 && $.task = "batch-attendances" }
+    //
+    // If parsing fails, fall back to the original string.
+    let mut conditions = Vec::new();
+
+    for token in trimmed.split_whitespace() {
+        if let Some((field, value)) = token.split_once('=') {
+            let field = field.trim();
+            let value = value.trim();
+            if !field.is_empty() && !value.is_empty() {
+                conditions.push(format!("$.{} = {}", field, value));
+                continue;
+            }
+        } else if let Some((field, value)) = token.split_once(':') {
+            let field = field.trim();
+            let value = value.trim();
+            if !field.is_empty() && !value.is_empty() {
+                conditions.push(format!("$.{} = {}", field, value));
+                continue;
+            }
         }
-    } else if let Some((field, value)) = trimmed.split_once(':') {
-        let field = field.trim();
-        let value = value.trim();
-        if !field.is_empty() && !value.is_empty() {
-            return format!("{{ $.{} = {} }}", field, value);
-        }
+
+        // If any token doesn't match our simple shorthand, bail out and
+        // return the original pattern unchanged.
+        return trimmed.to_string();
     }
 
-    // Fallback: leave as-is, so arbitrary patterns (e.g. "ERROR") still work.
-    trimmed.to_string()
+    if conditions.is_empty() {
+        // Fallback: leave as-is, so arbitrary patterns (e.g. "ERROR") still work.
+        trimmed.to_string()
+    } else {
+        format!("{{ {} }}", conditions.join(" && "))
+    }
 }
 
 #[cfg(test)]
@@ -448,6 +460,42 @@ mod tests {
         let raw = "level:error";
         let norm = normalize_filter_pattern(raw);
         assert_eq!(norm, "{ $.level = error }");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_multiple_equals_pairs() {
+        let raw = "routing_id=1364 task=\"batch-attendances\"";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(
+            norm,
+            "{ $.routing_id = 1364 && $.task = \"batch-attendances\" }"
+        );
+    }
+
+    #[test]
+    fn normalize_filter_pattern_multiple_colon_pairs() {
+        let raw = "level:error env:prod";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, "{ $.level = error && $.env = prod }");
+    }
+
+    #[test]
+    fn normalize_filter_pattern_mixed_pairs() {
+        let raw = "routing_id=1364 task:\"batch-attendances\"";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(
+            norm,
+            "{ $.routing_id = 1364 && $.task = \"batch-attendances\" }"
+        );
+    }
+
+    #[test]
+    fn normalize_filter_pattern_bails_out_on_unknown_token() {
+        // Contains a token we don't understand ("foo"), so we should
+        // return the original string unchanged.
+        let raw = "routing_id=1364 foo";
+        let norm = normalize_filter_pattern(raw);
+        assert_eq!(norm, raw);
     }
 
     #[test]

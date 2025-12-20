@@ -21,7 +21,9 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - Start time
   - End time
   - Filter pattern
-  - JSON fields via shorthand (e.g. `routing_id=123` → `{ $.routing_id = 123 }`)
+  - JSON fields via shorthand:
+    - Single field: `routing_id=123` → `{ $.routing_id = 123 }`
+    - Multiple fields: `routing_id=1364 task="batch-attendances"` → `{ $.routing_id = 1364 && $.task = "batch-attendances" }`
 - ⏱ Time parsing with friendly input
   - Absolute: `2025-12-11T10:00:00Z` or `2025-12-11 10:00:00`
   - Relative: `-5m`, `-1h`, `-1d` (relative to now)
