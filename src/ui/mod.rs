@@ -415,7 +415,10 @@ impl Widget for &App {
                 height: popup_height,
             };
 
-            let block = Block::bordered().title("Save filter");
+            let block = Block::bordered()
+                .title("Save filter")
+                .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White))
+                .border_style(Style::default().fg(Color::Yellow));
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
@@ -476,7 +479,10 @@ impl Widget for &App {
                 height: popup_height,
             };
 
-            let block = Block::bordered().title("Load filter");
+            let block = Block::bordered()
+                .title("Load filter")
+                .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White))
+                .border_style(Style::default().fg(Color::Yellow));
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
