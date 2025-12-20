@@ -94,3 +94,150 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{App, Focus};
+    use std::sync::mpsc;
+    use std::time::Instant as StdInstant;
+
+    fn app_with_filter_state() -> App {
+        let (tx, rx) = mpsc::channel();
+
+        App {
+            app_title: "Test".to_string(),
+            exit: false,
+            lines: Vec::new(),
+
+            all_groups: Vec::new(),
+            groups: Vec::new(),
+            selected_group: 0,
+            groups_scroll: 0,
+
+            profile: "test-profile".to_string(),
+            region: "eu-west-1".to_string(),
+            focus: Focus::Filter,
+
+            filter_start: String::new(),
+            filter_end: String::new(),
+            filter_query: String::new(),
+            filter_field: FilterField::Query,
+            editing: false,
+            cursor_on: true,
+            last_blink: StdInstant::now(),
+
+            group_search_active: false,
+            group_search_input: String::new(),
+
+            search_tx: tx,
+            search_rx: rx,
+            searching: false,
+            dots: 0,
+            last_dots: StdInstant::now(),
+            results_scroll: 0,
+
+            tail_mode: false,
+            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+
+            status_message: None,
+            status_set_at: None,
+
+            saved_filters: Vec::new(),
+            save_filter_popup_open: false,
+            save_filter_name: String::new(),
+            load_filter_popup_open: false,
+            load_filter_selected: 0,
+        }
+    }
+
+    #[test]
+    fn save_filter_creates_new_entry() {
+        let mut app = app_with_filter_state();
+        app.filter_start = "-5m".to_string();
+        app.filter_end = "".to_string();
+        app.filter_query = "routing_id=123".to_string();
+
+        app.open_save_filter_popup();
+        app.save_filter_name = "quick-errors".to_string();
+        app.handle_save_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.saved_filters.len(), 1);
+        let f = &app.saved_filters[0];
+        assert_eq!(f.name, "quick-errors");
+        assert_eq!(f.start, "-5m");
+        assert_eq!(f.end, "");
+        assert_eq!(f.query, "routing_id=123");
+    }
+
+    #[test]
+    fn save_filter_overwrites_existing_entry_with_same_name() {
+        let mut app = app_with_filter_state();
+        app.saved_filters.push(SavedFilter {
+            name: "quick-errors".to_string(),
+            start: "-5m".to_string(),
+            end: "".to_string(),
+            query: "routing_id=111".to_string(),
+        });
+
+        app.filter_start = "-15m".to_string();
+        app.filter_end = "".to_string();
+        app.filter_query = "routing_id=222".to_string();
+
+        app.open_save_filter_popup();
+        app.save_filter_name = "quick-errors".to_string();
+        app.handle_save_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.saved_filters.len(), 1);
+        let f = &app.saved_filters[0];
+        assert_eq!(f.name, "quick-errors");
+        assert_eq!(f.start, "-15m");
+        assert_eq!(f.end, "");
+        assert_eq!(f.query, "routing_id=222");
+    }
+
+    #[test]
+    fn load_filter_applies_selected_values_to_filter_fields() {
+        let mut app = app_with_filter_state();
+        app.saved_filters.push(SavedFilter {
+            name: "last-hour-errors".to_string(),
+            start: "-1h".to_string(),
+            end: "".to_string(),
+            query: "level=error".to_string(),
+        });
+
+        app.open_load_filter_popup();
+        // selected index is 0 by default
+        app.handle_load_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.filter_start, "-1h");
+        assert_eq!(app.filter_end, "");
+        assert_eq!(app.filter_query, "level=error");
+    }
+
+    #[test]
+    fn load_filter_popup_moves_selection_with_up_down() {
+        let mut app = app_with_filter_state();
+        app.saved_filters.push(SavedFilter {
+            name: "first".to_string(),
+            start: "-5m".to_string(),
+            end: "".to_string(),
+            query: "a=1".to_string(),
+        });
+        app.saved_filters.push(SavedFilter {
+            name: "second".to_string(),
+            start: "-15m".to_string(),
+            end: "".to_string(),
+            query: "b=2".to_string(),
+        });
+
+        app.open_load_filter_popup();
+        assert_eq!(app.load_filter_selected, 0);
+
+        app.handle_load_filter_popup_key(KeyCode::Down);
+        assert_eq!(app.load_filter_selected, 1);
+
+        app.handle_load_filter_popup_key(KeyCode::Up);
+        assert_eq!(app.load_filter_selected, 0);
+    }
+}
