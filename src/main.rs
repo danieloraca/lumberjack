@@ -66,6 +66,12 @@ fn main() -> io::Result<()> {
         tail_stop: Arc::new(AtomicBool::new(false)),
         status_message: None,
         status_set_at: None,
+
+        saved_filters: Vec::new(),
+        save_filter_popup_open: false,
+        save_filter_name: String::new(),
+        load_filter_popup_open: false,
+        load_filter_selected: 0,
     };
 
     let app_result = app.run(&mut terminal);

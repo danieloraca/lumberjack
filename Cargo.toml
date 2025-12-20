@@ -1,6 +1,6 @@
 [package]
 name = "lumberjack"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 
 [dependencies]
@@ -11,6 +11,7 @@ chrono = { version = "0.4.42", default-features = false, features = ["std", "clo
 serde_json = { version = "1.0.145", default-features = false, features = ["std"] }
 tokio = {version="1.48.0", default-features = false, features = ["rt-multi-thread", "macros", "time"] }
 arboard = { version = "3.6.1", default-features = false }
+serde = {version = "1.0.228", default-features = false, features = ["derive"]}
 
 [profile.release]
 lto = true

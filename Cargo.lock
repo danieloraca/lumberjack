@@ -1250,13 +1250,14 @@ dependencies = [
 
 [[package]]
 name = "lumberjack"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "arboard",
  "aws-config",
  "aws-sdk-cloudwatchlogs",
  "chrono",
  "ratatui",
+ "serde",
  "serde_json",
  "tokio",
 ]

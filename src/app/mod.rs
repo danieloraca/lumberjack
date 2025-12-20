@@ -1,3 +1,7 @@
+mod clipboard;
+mod filters;
+mod keymap;
+
 use std::io;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
@@ -5,12 +9,12 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use ratatui::crossterm::event;
-use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::prelude::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::aws::fetch_log_events;
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Focus {
@@ -25,6 +29,16 @@ pub enum FilterField {
     End,
     Query,
     Search,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SavedFilter {
+    pub name: String,
+    #[serde(default)]
+    pub group: String,
+    pub start: String,
+    pub end: String,
+    pub query: String,
 }
 
 pub struct App {
@@ -64,6 +78,14 @@ pub struct App {
 
     pub status_message: Option<String>,
     pub status_set_at: Option<Instant>,
+
+    pub saved_filters: Vec<SavedFilter>,
+
+    pub save_filter_popup_open: bool,
+    pub save_filter_name: String,
+
+    pub load_filter_popup_open: bool,
+    pub load_filter_selected: usize,
 }
 
 impl App {
@@ -118,147 +140,6 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         frame.render_widget(&*self, frame.area());
-    }
-
-    fn handle_key_event(
-        &mut self,
-        key_event: ratatui::crossterm::event::KeyEvent,
-    ) -> io::Result<()> {
-        if key_event.kind != KeyEventKind::Press {
-            return Ok(());
-        }
-
-        match key_event.code {
-            // q should NOT quit while editing or while group search is active
-            KeyCode::Char('q') if !self.editing && !self.group_search_active => {
-                self.tail_stop.store(true, Ordering::Relaxed);
-                self.exit = true;
-            }
-
-            // Switch focus between panes
-            KeyCode::Tab if !self.editing => {
-                self.focus = match self.focus {
-                    Focus::Groups => Focus::Filter,
-                    Focus::Filter => Focus::Groups,
-                    Focus::Results => Focus::Groups,
-                };
-            }
-
-            // Start group search
-            KeyCode::Char('/') if self.focus == Focus::Groups && !self.editing => {
-                // Enter search mode but KEEP the last query.
-                // That way hitting `/` again lets you refine the previous search.
-                self.group_search_active = true;
-                self.focus = Focus::Groups;
-                return Ok(());
-            }
-
-            // ESC cancels group search or filter editing
-            KeyCode::Esc => {
-                if self.group_search_active {
-                    self.group_search_active = false;
-                    self.group_search_input.clear();
-                    self.apply_group_search_filter();
-                    return Ok(());
-                }
-                self.editing = false;
-            }
-
-            // While group search is active: handle its input
-            KeyCode::Backspace if self.group_search_active => {
-                self.group_search_input.pop();
-                self.apply_group_search_filter();
-                return Ok(());
-            }
-            KeyCode::Char(c) if self.group_search_active => {
-                if !c.is_control() {
-                    self.group_search_input.push(c);
-                    self.apply_group_search_filter();
-                }
-                return Ok(());
-            }
-
-            // Confirm search with Enter: exit search mode but keep filtered groups
-            KeyCode::Enter if self.group_search_active => {
-                self.group_search_active = false;
-                return Ok(());
-            }
-
-            // === Filter editing logic (restored) ===
-
-            // While editing filter fields: route text input there
-            KeyCode::Backspace if self.editing => {
-                self.active_field_mut().pop();
-            }
-            KeyCode::Char(c) if self.editing => {
-                self.active_field_mut().push(c);
-            }
-
-            // Enter: start/stop editing, or activate Search button
-            KeyCode::Enter => {
-                if self.focus == Focus::Filter
-                    && self.filter_field == FilterField::Search
-                    && !self.editing
-                {
-                    self.start_search();
-                } else {
-                    self.editing = !self.editing;
-                }
-            }
-
-            // Navigation when NOT editing
-            KeyCode::Up if !self.editing => match self.focus {
-                Focus::Groups => self.groups_up(),
-                Focus::Filter => self.filter_prev(),
-                Focus::Results => self.results_up(),
-            },
-
-            KeyCode::Down if !self.editing => match self.focus {
-                Focus::Groups => self.groups_down(),
-                Focus::Filter => self.filter_next(),
-                Focus::Results => self.results_down(),
-            },
-
-            KeyCode::Char('y') if !self.editing && self.focus == Focus::Results => {
-                self.copy_results_to_clipboard();
-            }
-
-            KeyCode::Char('t') if !self.editing && !self.group_search_active => {
-                self.tail_mode = !self.tail_mode;
-
-                // When turning tail off, signal any running tail loop to stop
-                if !self.tail_mode {
-                    self.tail_stop
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-            }
-
-            // Quick time presets (Filter pane, not editing)
-            KeyCode::Char('1')
-                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
-            {
-                self.apply_time_preset("-5m");
-            }
-            KeyCode::Char('2')
-                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
-            {
-                self.apply_time_preset("-15m");
-            }
-            KeyCode::Char('3')
-                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
-            {
-                self.apply_time_preset("-1h");
-            }
-            KeyCode::Char('4')
-                if self.focus == Focus::Filter && !self.editing && !self.group_search_active =>
-            {
-                self.apply_time_preset("-24h");
-            }
-
-            _ => {}
-        }
-
-        Ok(())
     }
 
     pub fn draw_scrollbar(
@@ -591,21 +472,6 @@ impl App {
         self.editing = false;
     }
 
-    fn copy_results_to_clipboard(&mut self) {
-        let text = self.results_text();
-        if text.trim().is_empty() {
-            return;
-        }
-
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if clipboard.set_text(text.clone()).is_ok() {
-                self.status_message =
-                    Some(format!("Copied {} lines to clipboard", self.lines.len()));
-                self.status_set_at = Some(Instant::now());
-            }
-        }
-    }
-
     fn maybe_clear_status(&mut self) {
         if let Some(set_at) = self.status_set_at {
             if set_at.elapsed() >= Duration::from_secs(2) {
@@ -613,10 +479,6 @@ impl App {
                 self.status_set_at = None;
             }
         }
-    }
-
-    fn results_text(&self) -> String {
-        self.lines.join("\n")
     }
 }
 
@@ -662,8 +524,15 @@ mod tests {
 
             tail_mode: false,
             tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+
             status_message: None,
             status_set_at: None,
+
+            saved_filters: Vec::new(),
+            save_filter_popup_open: false,
+            save_filter_name: String::new(),
+            load_filter_popup_open: false,
+            load_filter_selected: 0,
         }
     }
 
@@ -767,36 +636,6 @@ mod tests {
         assert_eq!(app.filter_end, "");
         assert_eq!(app.filter_field, FilterField::Query);
         assert!(!app.editing);
-    }
-
-    #[test]
-    fn results_text_joins_lines_with_newlines() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines = vec![
-            "line1".to_string(),
-            "line2".to_string(),
-            "line3".to_string(),
-        ];
-
-        let text = app.results_text();
-        assert_eq!(text, "line1\nline2\nline3");
-    }
-
-    #[test]
-    fn results_text_handles_embedded_newlines() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines = vec!["line1a\nline1b".to_string(), "line2".to_string()];
-
-        let text = app.results_text();
-        assert_eq!(text, "line1a\nline1b\nline2");
-    }
-
-    #[test]
-    fn copy_results_to_clipboard_does_nothing_when_empty() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines.clear();
-
-        app.copy_results_to_clipboard();
     }
 
     #[test]
