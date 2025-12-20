@@ -1,3 +1,4 @@
+mod clipboard;
 mod filters;
 
 use std::io;
@@ -246,8 +247,20 @@ impl App {
                 Focus::Results => self.results_down(),
             },
 
+            // Copy results to clipboard (Results pane, not editing)
             KeyCode::Char('y') if !self.editing && self.focus == Focus::Results => {
                 self.copy_results_to_clipboard();
+            }
+
+            // Toggle tail mode (any pane, not editing or in group search)
+            KeyCode::Char('t') if !self.editing && !self.group_search_active => {
+                self.tail_mode = !self.tail_mode;
+
+                // When turning tail off, signal any running tail loop to stop
+                if !self.tail_mode {
+                    self.tail_stop
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
             }
 
             // Open "Save filter" popup (Filter pane, not editing)
@@ -260,16 +273,6 @@ impl App {
             // Open "Load filter" popup (any focus, not editing)
             KeyCode::Char('F') if !self.editing && !self.group_search_active => {
                 self.open_load_filter_popup();
-            }
-
-            KeyCode::Char('t') if !self.editing && !self.group_search_active => {
-                self.tail_mode = !self.tail_mode;
-
-                // When turning tail off, signal any running tail loop to stop
-                if !self.tail_mode {
-                    self.tail_stop
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
             }
 
             // Quick time presets (Filter pane, not editing)
@@ -630,21 +633,6 @@ impl App {
         self.editing = false;
     }
 
-    fn copy_results_to_clipboard(&mut self) {
-        let text = self.results_text();
-        if text.trim().is_empty() {
-            return;
-        }
-
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if clipboard.set_text(text.clone()).is_ok() {
-                self.status_message =
-                    Some(format!("Copied {} lines to clipboard", self.lines.len()));
-                self.status_set_at = Some(Instant::now());
-            }
-        }
-    }
-
     fn maybe_clear_status(&mut self) {
         if let Some(set_at) = self.status_set_at {
             if set_at.elapsed() >= Duration::from_secs(2) {
@@ -652,10 +640,6 @@ impl App {
                 self.status_set_at = None;
             }
         }
-    }
-
-    fn results_text(&self) -> String {
-        self.lines.join("\n")
     }
 }
 
@@ -813,36 +797,6 @@ mod tests {
         assert_eq!(app.filter_end, "");
         assert_eq!(app.filter_field, FilterField::Query);
         assert!(!app.editing);
-    }
-
-    #[test]
-    fn results_text_joins_lines_with_newlines() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines = vec![
-            "line1".to_string(),
-            "line2".to_string(),
-            "line3".to_string(),
-        ];
-
-        let text = app.results_text();
-        assert_eq!(text, "line1\nline2\nline3");
-    }
-
-    #[test]
-    fn results_text_handles_embedded_newlines() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines = vec!["line1a\nline1b".to_string(), "line2".to_string()];
-
-        let text = app.results_text();
-        assert_eq!(text, "line1a\nline1b\nline2");
-    }
-
-    #[test]
-    fn copy_results_to_clipboard_does_nothing_when_empty() {
-        let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.lines.clear();
-
-        app.copy_results_to_clipboard();
     }
 
     #[test]
