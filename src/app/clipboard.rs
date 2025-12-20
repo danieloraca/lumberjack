@@ -5,21 +5,10 @@ use arboard::Clipboard;
 use crate::app::App;
 
 impl App {
-    /// Build the textual representation of the Results pane.
-    ///
-    /// Each entry in `self.lines` may already contain embedded newlines, so this
-    /// join simply inserts a newline between entries to form a single blob of
-    /// text that matches what the user sees in the Results pane.
     pub fn results_text(&self) -> String {
         self.lines.join("\n")
     }
 
-    /// Copy the current Results to the system clipboard.
-    ///
-    /// This is a best-effort operation:
-    /// - If there is no non-whitespace text, it does nothing.
-    /// - If the clipboard backend is unavailable, it silently ignores the error.
-    /// - On success, it sets a transient status message so the user gets feedback.
     pub fn copy_results_to_clipboard(&mut self) {
         let text = self.results_text();
         if text.trim().is_empty() {
