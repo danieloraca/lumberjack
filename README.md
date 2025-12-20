@@ -24,6 +24,9 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - JSON fields via shorthand:
     - Single field: `routing_id=123` → `{ $.routing_id = 123 }`
     - Multiple fields: `routing_id=1364 task="batch-attendances"` → `{ $.routing_id = 1364 && $.task = "batch-attendances" }`
+  - Saved presets:
+    - Save current filter: `s` (give it a name; saved to `~/.config/lumberjack/filters.json`)
+    - Load saved filter: `F` (open popup, select by name)
 - ⏱ Time parsing with friendly input
   - Absolute: `2025-12-11T10:00:00Z` or `2025-12-11 10:00:00`
   - Relative: `-5m`, `-1h`, `-1d` (relative to now)
@@ -66,7 +69,9 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `↑` / `↓` – Move selection / scroll
 - `Enter` – Edit filter field / run search
 - `1` / `2` / `3` / `4` – Quick time presets for **Start** (sets Start to `-5m` / `-15m` / `-1h` / `-24h`, and clears End to “now”)
+- `s` – Save current filter (opens name popup; persists to `~/.config/lumberjack/filters.json`)
+- `F` – Load saved filter (opens popup with saved filter names)
 - `t` – Toggle tail/stream mode for results
-- `Esc` – Cancel editing or group search
+- `Esc` – Cancel editing, group search, or close popups
 - `y` – Copy all Results to clipboard (when Results pane is focused)
 - `q` – Quit (except while editing or in group search)

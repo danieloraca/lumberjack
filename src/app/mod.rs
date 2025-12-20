@@ -14,6 +14,7 @@ use ratatui::style::{Color, Style};
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::aws::fetch_log_events;
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Focus {
@@ -30,6 +31,7 @@ pub enum FilterField {
     Search,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SavedFilter {
     pub name: String,
     pub start: String,

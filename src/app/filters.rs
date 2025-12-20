@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
@@ -11,6 +12,13 @@ impl App {
     }
 
     pub fn open_load_filter_popup(&mut self) {
+        if self.saved_filters.is_empty() {
+            // Try to load from disk lazily
+            if let Ok(filters) = Self::load_saved_filters_from_disk() {
+                self.saved_filters = filters;
+            }
+        }
+
         if self.saved_filters.is_empty() {
             self.status_message = Some("No saved filters".to_string());
             self.status_set_at = Some(Instant::now());
@@ -26,6 +34,7 @@ impl App {
             KeyCode::Esc => {
                 self.save_filter_popup_open = false;
             }
+
             KeyCode::Enter => {
                 if !self.save_filter_name.trim().is_empty() {
                     let name = self.save_filter_name.trim().to_string();
@@ -42,14 +51,26 @@ impl App {
                             query: self.filter_query.clone(),
                         });
                     }
-                    self.status_message = Some(format!("Saved filter \"{}\"", name));
+
+                    // Best-effort persistence; update status on success or failure
+                    match Self::save_all_filters_to_disk(&self.saved_filters) {
+                        Ok(()) => {
+                            self.status_message = Some(format!("Saved filter \"{}\"", name));
+                        }
+                        Err(e) => {
+                            self.status_message =
+                                Some(format!("Error saving filter \"{}\": {}", name, e));
+                        }
+                    }
                     self.status_set_at = Some(Instant::now());
                 }
                 self.save_filter_popup_open = false;
             }
+
             KeyCode::Backspace => {
                 self.save_filter_name.pop();
             }
+
             KeyCode::Char(c) => {
                 if !c.is_control() {
                     self.save_filter_name.push(c);
@@ -92,6 +113,36 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn filters_path() -> Result<PathBuf, String> {
+        let home = std::env::var("HOME").map_err(|e| format!("HOME not set: {e}"))?;
+        let mut path = PathBuf::from(home);
+        path.push(".config");
+        path.push("lumberjack");
+        std::fs::create_dir_all(&path)
+            .map_err(|e| format!("create_dir_all {}: {e}", path.display()))?;
+        path.push("filters.json");
+        Ok(path)
+    }
+
+    fn load_saved_filters_from_disk() -> Result<Vec<SavedFilter>, String> {
+        let path = Self::filters_path()?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let data = std::fs::read_to_string(&path)
+            .map_err(|e| format!("read_to_string {}: {e}", path.display()))?;
+        let filters: Vec<SavedFilter> =
+            serde_json::from_str(&data).map_err(|e| format!("decode: {e}"))?;
+        Ok(filters)
+    }
+
+    fn save_all_filters_to_disk(filters: &[SavedFilter]) -> Result<(), String> {
+        let path = Self::filters_path()?;
+        let data = serde_json::to_string_pretty(filters).map_err(|e| format!("encode: {e}"))?;
+        std::fs::write(&path, data).map_err(|e| format!("write {}: {e}", path.display()))?;
+        Ok(())
     }
 }
 
