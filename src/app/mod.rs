@@ -34,6 +34,8 @@ pub enum FilterField {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SavedFilter {
     pub name: String,
+    #[serde(default)]
+    pub group: String,
     pub start: String,
     pub end: String,
     pub query: String,

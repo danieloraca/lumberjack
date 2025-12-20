@@ -38,14 +38,21 @@ impl App {
             KeyCode::Enter => {
                 if !self.save_filter_name.trim().is_empty() {
                     let name = self.save_filter_name.trim().to_string();
+                    let current_group = self
+                        .groups
+                        .get(self.selected_group)
+                        .cloned()
+                        .unwrap_or_default();
                     // Overwrite if exists
                     if let Some(existing) = self.saved_filters.iter_mut().find(|f| f.name == name) {
+                        existing.group = current_group.clone();
                         existing.start = self.filter_start.clone();
                         existing.end = self.filter_end.clone();
                         existing.query = self.filter_query.clone();
                     } else {
                         self.saved_filters.push(SavedFilter {
                             name: name.clone(),
+                            group: current_group.clone(),
                             start: self.filter_start.clone(),
                             end: self.filter_end.clone(),
                             query: self.filter_query.clone(),
@@ -106,6 +113,13 @@ impl App {
                     self.filter_end = f.end.clone();
                     self.filter_query = f.query.clone();
                     self.filter_field = FilterField::Query;
+                    // Try to select the saved group if it still exists in the groups list
+                    if !f.group.is_empty() {
+                        if let Some(idx) = self.groups.iter().position(|g| g == &f.group) {
+                            self.selected_group = idx;
+                            self.groups_scroll = 0; // or clamp via clamp_groups_scroll later
+                        }
+                    }
                     self.status_message = Some(format!("Loaded filter \"{}\"", f.name));
                     self.status_set_at = Some(Instant::now());
                 }
@@ -240,6 +254,7 @@ mod tests {
         let mut app = app_with_filter_state();
         app.saved_filters.push(SavedFilter {
             name: "quick-errors".to_string(),
+            group: "".to_string(),
             start: "-5m".to_string(),
             end: "".to_string(),
             query: "routing_id=111".to_string(),
@@ -266,6 +281,7 @@ mod tests {
         let mut app = app_with_filter_state();
         app.saved_filters.push(SavedFilter {
             name: "last-hour-errors".to_string(),
+            group: "".to_string(),
             start: "-1h".to_string(),
             end: "".to_string(),
             query: "level=error".to_string(),
@@ -285,12 +301,14 @@ mod tests {
         let mut app = app_with_filter_state();
         app.saved_filters.push(SavedFilter {
             name: "first".to_string(),
+            group: "".to_string(),
             start: "-5m".to_string(),
             end: "".to_string(),
             query: "a=1".to_string(),
         });
         app.saved_filters.push(SavedFilter {
             name: "second".to_string(),
+            group: "".to_string(),
             start: "-15m".to_string(),
             end: "".to_string(),
             query: "b=2".to_string(),
@@ -304,5 +322,36 @@ mod tests {
 
         app.handle_load_filter_popup_key(KeyCode::Up);
         assert_eq!(app.load_filter_selected, 0);
+    }
+
+    #[test]
+    fn save_and_load_filter_persists_group_selection() {
+        // Set up app with two groups and select the second one
+        let mut app = app_with_filter_state();
+        app.groups = vec![
+            "/aws/lambda/first".to_string(),
+            "/aws/lambda/second".to_string(),
+        ];
+        app.selected_group = 1; // "/aws/lambda/second"
+
+        app.filter_start = "-5m".to_string();
+        app.filter_end = "".to_string();
+        app.filter_query = "routing_id=999".to_string();
+
+        app.open_save_filter_popup();
+        app.save_filter_name = "with-group".to_string();
+        app.handle_save_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.saved_filters.len(), 1);
+        let f = &app.saved_filters[0];
+        assert_eq!(f.group, "/aws/lambda/second");
+
+        // Reset selection and then load the filter, it should restore the group
+        app.selected_group = 0;
+        app.open_load_filter_popup();
+        app.handle_load_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.selected_group, 1);
+        assert_eq!(app.groups[app.selected_group], "/aws/lambda/second");
     }
 }
