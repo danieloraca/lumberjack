@@ -399,6 +399,132 @@ impl Widget for &App {
                 },
                 buf,
             );
+
+        // --- Save / Load filter popups (drawn on top of everything else) ---
+        if self.save_filter_popup_open {
+            // Centered 40x5 popup
+            let popup_width = 40u16.min(area.width);
+            let popup_height = 5u16.min(area.height);
+            let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+            let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+
+            let popup_area = Rect {
+                x: popup_x,
+                y: popup_y,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            let block = Block::bordered().title("Save filter");
+            let inner = block.inner(popup_area);
+            block.render(popup_area, buf);
+
+            // Label + current name on the next line
+            let label = "Name:";
+            Line::from(label)
+                .style(Style::default().fg(Color::White))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y,
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+            let name_line = format!("{}", self.save_filter_name);
+            Line::from(name_line)
+                .style(Style::default().fg(Color::Yellow))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y + 1,
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+            // Hint line
+            Line::from("Enter Save   Esc Cancel")
+                .style(Style::default().fg(Color::Gray))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y + 3.min(inner.height.saturating_sub(1)),
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+        }
+
+        if self.load_filter_popup_open {
+            // Centered popup sized to number of filters (up to a max height)
+            let popup_width = 40u16.min(area.width);
+            let max_height = 10u16;
+            let needed_height = (self.saved_filters.len() as u16 + 3).max(3);
+            let popup_height = max_height.min(needed_height).min(area.height);
+            let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+            let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+
+            let popup_area = Rect {
+                x: popup_x,
+                y: popup_y,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            let block = Block::bordered().title("Load filter");
+            let inner = block.inner(popup_area);
+            block.render(popup_area, buf);
+
+            // Render filter names with a simple highlight on the selected one
+            let mut y = inner.y;
+            for (idx, f) in self.saved_filters.iter().enumerate() {
+                if y >= inner.y + inner.height {
+                    break;
+                }
+
+                let marker = if idx == self.load_filter_selected {
+                    ">"
+                } else {
+                    " "
+                };
+                let line = format!("{marker} {}", f.name);
+                let style = if idx == self.load_filter_selected {
+                    Style::default().fg(Color::Yellow)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                Line::from(line).style(style).render(
+                    Rect {
+                        x: inner.x,
+                        y,
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+                y += 1;
+            }
+
+            // Hint line at the bottom of the popup
+            Line::from("Enter Load   Esc Cancel")
+                .style(Style::default().fg(Color::Gray))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y + inner.height.saturating_sub(1),
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+        }
     }
 }
 
@@ -450,6 +576,12 @@ mod ui_tests {
             tail_stop: Arc::new(AtomicBool::new(false)),
             status_message: None,
             status_set_at: None,
+
+            saved_filters: Vec::new(),
+            save_filter_popup_open: false,
+            save_filter_name: String::new(),
+            load_filter_popup_open: false,
+            load_filter_selected: 0,
         }
     }
 
