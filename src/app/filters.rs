@@ -116,6 +116,20 @@ impl App {
     }
 
     fn filters_path() -> Result<PathBuf, String> {
+        // In tests, write filters to a separate location so we don't overwrite
+        // the user's real filters.
+        if cfg!(test) {
+            let home = std::env::var("HOME").map_err(|e| format!("HOME not set: {e}"))?;
+            let mut path = PathBuf::from(home);
+            path.push(".config");
+            path.push("lumberjack-test");
+            std::fs::create_dir_all(&path)
+                .map_err(|e| format!("create_dir_all {}: {e}", path.display()))?;
+            path.push("filters.json");
+            return Ok(path);
+        }
+
+        // Normal runtime path
         let home = std::env::var("HOME").map_err(|e| format!("HOME not set: {e}"))?;
         let mut path = PathBuf::from(home);
         path.push(".config");
