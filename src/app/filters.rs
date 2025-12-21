@@ -109,22 +109,31 @@ impl App {
             }
             KeyCode::Enter => {
                 if let Some(f) = self.saved_filters.get(self.load_filter_selected) {
-                    self.filter_start = f.start.clone();
-                    self.filter_end = f.end.clone();
-                    self.filter_query = f.query.clone();
+                    let start = f.start.clone();
+                    let end = f.end.clone();
+                    let query = f.query.clone();
+                    let group = f.group.clone();
+                    let name = f.name.clone();
+
+                    self.filter_start = start;
+                    self.filter_end = end;
+                    self.filter_query = query;
                     self.filter_field = FilterField::Query;
-                    // Try to select the saved group if it still exists in the groups list
-                    if !f.group.is_empty() {
-                        if let Some(idx) = self.groups.iter().position(|g| g == &f.group) {
+
+                    if !group.is_empty() {
+                        if let Some(idx) = self.groups.iter().position(|g| g == &group) {
                             self.selected_group = idx;
-                            self.groups_scroll = 0; // or clamp via clamp_groups_scroll later
+                            let visible_rows = self.visible_group_rows();
+                            self.clamp_groups_scroll(visible_rows);
                         }
                     }
-                    self.status_message = Some(format!("Loaded filter \"{}\"", f.name));
+
+                    self.status_message = Some(format!("Loaded filter \"{}\"", name));
                     self.status_set_at = Some(Instant::now());
                 }
                 self.load_filter_popup_open = false;
             }
+
             _ => {}
         }
     }
@@ -353,5 +362,44 @@ mod tests {
 
         assert_eq!(app.selected_group, 1);
         assert_eq!(app.groups[app.selected_group], "/aws/lambda/second");
+    }
+
+    #[test]
+    fn load_filter_clamps_groups_scroll_to_show_selected_group() {
+        let mut app = app_with_filter_state();
+
+        app.groups = (0..10).map(|i| format!("/aws/lambda/group-{i}")).collect();
+
+        app.selected_group = 0;
+        app.groups_scroll = 0;
+
+        app.selected_group = 7;
+        app.filter_start = "-5m".to_string();
+        app.filter_end = "".to_string();
+        app.filter_query = "level=error".to_string();
+
+        app.open_save_filter_popup();
+        app.save_filter_name = "deep-group".to_string();
+        app.handle_save_filter_popup_key(KeyCode::Enter);
+
+        app.selected_group = 0;
+        app.groups_scroll = 0;
+
+        app.open_load_filter_popup();
+        app.handle_load_filter_popup_key(KeyCode::Enter);
+
+        assert_eq!(app.selected_group, 7);
+
+        let visible_rows = app.visible_group_rows();
+        let scroll = app.groups_scroll;
+        assert!(
+            app.selected_group >= scroll && app.selected_group < scroll + visible_rows,
+            "expected selected_group {} to be within visible window [{}, {}), but groups_scroll was {} and visible_rows was {}",
+            app.selected_group,
+            scroll,
+            scroll + visible_rows,
+            scroll,
+            visible_rows
+        );
     }
 }
