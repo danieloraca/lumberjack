@@ -197,6 +197,7 @@ mod tests {
             app_title: "Test".to_string(),
             exit: false,
             lines: Vec::new(),
+            filter_cursor_pos: 0,
 
             all_groups: Vec::new(),
             groups: Vec::new(),

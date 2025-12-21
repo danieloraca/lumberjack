@@ -37,6 +37,7 @@ fn main() -> io::Result<()> {
         app_title: APP_TITLE.to_string(),
         exit: false,
         lines: Vec::new(),
+        filter_cursor_pos: 0,
         all_groups: groups.clone(),
         groups,
         selected_group: 0,

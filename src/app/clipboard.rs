@@ -38,6 +38,7 @@ mod tests {
             app_title: "Test".to_string(),
             exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
+            filter_cursor_pos: 0,
 
             all_groups: Vec::new(),
             groups: Vec::new(),
