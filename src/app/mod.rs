@@ -45,6 +45,7 @@ pub struct App {
     pub app_title: String,
     pub exit: bool,
     pub lines: Vec<String>,
+    pub filter_cursor_pos: usize,
 
     pub all_groups: Vec<String>,
     pub groups: Vec<String>,
@@ -494,6 +495,7 @@ mod tests {
             app_title: "Test".to_string(),
             exit: false,
             lines: Vec::new(),
+            filter_cursor_pos: 0,
 
             all_groups: groups_owned.clone(),
             groups: groups_owned,

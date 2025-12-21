@@ -368,11 +368,14 @@ impl Widget for &App {
                     FilterField::Search => "",
                 };
 
-                let value_len = self.active_field_len(); // add helper below
+                let value_len = self.active_field_len();
                 let y = filter_inner.y + field_row;
 
-                // Cursor x = left + label width + typed text width
-                let mut x = filter_inner.x + label.len() as u16 + value_len as u16;
+                // Clamp cursor pos to field length
+                let cursor_col = self.filter_cursor_pos.min(value_len);
+
+                // Cursor x = left + label width + cursor_col
+                let mut x = filter_inner.x + label.len() as u16 + cursor_col as u16;
 
                 // clamp within the filter box
                 let max_x = filter_inner.x + filter_inner.width.saturating_sub(1);
@@ -578,6 +581,7 @@ mod ui_tests {
             app_title: "lumberjack".to_string(),
             exit: false,
             lines: vec![],
+            filter_cursor_pos: 0,
 
             all_groups: groups_owned.clone(),
             groups: groups_owned,
