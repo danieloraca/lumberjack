@@ -33,8 +33,8 @@ impl Widget for &App {
             Style::default().bg(Color::Rgb(18, 18, 18)).fg(Color::White) // still readable while unfocused
         };
 
-        let header_style = Style::default().bg(Color::Rgb(30 as u8, 30 as u8, 30 as u8));
-        let footer_style = Style::default().bg(Color::Rgb(40, 40, 40)).fg(Color::Gray);
+        let header_style = Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White);
+        let footer_style = Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::Gray);
 
         let groups_border = if self.focus == Focus::Groups {
             Style::default().fg(Color::Yellow)
@@ -106,16 +106,13 @@ impl Widget for &App {
         };
 
         let groups_block = Block::bordered()
-            .title("Groups (Tab to switch)")
+            .title("Groups")
             .style(groups_block_style)
             .border_style(groups_border);
 
         let inner = groups_block.inner(groups_row[0]);
         groups_block.render(groups_row[0], buf);
 
-        // Keep the filter pane background consistent so non-interactive hint rows
-        // (like Presets) can be rendered with a slightly different bg and still look correct.
-        // Using the same base bg in both focused/unfocused states avoids unexpected bg blending.
         let filter_block_style = if self.focus == Focus::Filter {
             Style::default().bg(Color::Rgb(20, 20, 20)).fg(Color::White)
         } else {
@@ -223,10 +220,41 @@ impl Widget for &App {
         let end = (start + height).min(all_lines.len());
 
         for (i, line) in all_lines[start..end].iter().enumerate() {
+            let y = text_area.y + i as u16;
+
+            // Heuristic: line starts with something RFC3339-ish, e.g. 2025-12-21T16:11:00+00:00
+            let looks_like_ts = line.len() >= 20
+                && line.chars().nth(4) == Some('-')
+                && line.chars().nth(7) == Some('-')
+                && line.chars().nth(10) == Some('T')
+                && (line.ends_with('Z') || line.contains('+'));
+
+            if looks_like_ts {
+                // Style the entire timestamp line differently
+                Line::from(*line)
+                    .style(
+                        Style::default()
+                            .fg(Color::Rgb(100, 180, 180))
+                            .bg(Color::Rgb(20, 20, 20))
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    )
+                    .render(
+                        Rect {
+                            x: text_area.x,
+                            y,
+                            width: text_area.width,
+                            height: 1,
+                        },
+                        buf,
+                    );
+                continue;
+            }
+
+            // Fallback: render the whole line normally
             Line::from(*line).render(
                 Rect {
                     x: text_area.x,
-                    y: text_area.y + i as u16,
+                    y,
                     width: text_area.width,
                     height: 1,
                 },
