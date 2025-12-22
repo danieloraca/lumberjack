@@ -136,7 +136,7 @@ impl Widget for &App {
         };
 
         let results_block_style = if self.focus == Focus::Results {
-            Style::default().bg(Color::Black).fg(Color::White)
+            Style::default().bg(Color::Rgb(5, 5, 5)).fg(Color::White)
         } else {
             Style::default()
                 .bg(Color::Rgb(14, 14, 14))
@@ -230,23 +230,48 @@ impl Widget for &App {
                 && (line.ends_with('Z') || line.contains('+'));
 
             if looks_like_ts {
-                // Style the entire timestamp line differently
-                Line::from(*line)
-                    .style(
-                        Style::default()
-                            .fg(Color::Rgb(100, 180, 180))
-                            .bg(Color::Rgb(20, 20, 20))
-                            .add_modifier(ratatui::style::Modifier::BOLD),
-                    )
-                    .render(
-                        Rect {
-                            x: text_area.x,
-                            y,
-                            width: text_area.width,
-                            height: 1,
-                        },
-                        buf,
-                    );
+                // Split into "timestamp" and "rest" so we can style them differently.
+                // If there is no space, treat the whole line as the timestamp.
+                let (ts, rest_opt) = match line.split_once(' ') {
+                    Some((ts, rest)) => (ts, Some(rest)),
+                    None => (*line, None),
+                };
+
+                let ts_style = Style::default()
+                    .fg(Color::Rgb(100, 180, 180))
+                    .bg(Color::Rgb(5, 5, 5))
+                    .add_modifier(ratatui::style::Modifier::BOLD);
+
+                // Render timestamp "column"
+                let ts_width = ts.len() as u16;
+                Line::from(ts).style(ts_style).render(
+                    Rect {
+                        x: text_area.x,
+                        y,
+                        width: ts_width.min(text_area.width),
+                        height: 1,
+                    },
+                    buf,
+                );
+
+                // Render message "column" after a small gap, if any
+                if let Some(rest) = rest_opt {
+                    let gap = 2u16;
+                    let msg_x = text_area.x + ts_width.saturating_add(gap);
+                    if msg_x < text_area.x + text_area.width {
+                        let available = (text_area.x + text_area.width) - msg_x;
+                        Line::from(rest).render(
+                            Rect {
+                                x: msg_x,
+                                y,
+                                width: available,
+                                height: 1,
+                            },
+                            buf,
+                        );
+                    }
+                }
+
                 continue;
             }
 

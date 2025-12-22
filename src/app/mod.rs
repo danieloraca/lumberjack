@@ -157,22 +157,22 @@ impl App {
         // x column for scrollbar (rightmost column inside results block)
         let x = area.x + area.width - 1;
 
-        // Style: subtle when unfocused, brighter when focused
+        // Style: subtle when unfocused, brighter and more colorful when focused
         let track_style = if focus {
             Style::default()
-                .fg(Color::Rgb(100, 100, 100))
-                .bg(Color::Black)
+                .fg(Color::Rgb(130, 130, 130))
+                .bg(Color::Rgb(5, 5, 5))
         } else {
             Style::default()
-                .fg(Color::Rgb(60, 60, 60))
+                .fg(Color::Rgb(80, 80, 80))
                 .bg(Color::Rgb(14, 14, 14))
         };
 
         let thumb_style = if focus {
-            Style::default().fg(Color::White).bg(Color::Black)
+            Style::default().fg(Color::Cyan).bg(Color::Rgb(5, 5, 5))
         } else {
             Style::default()
-                .fg(Color::Rgb(180, 180, 180))
+                .fg(Color::Rgb(200, 200, 200))
                 .bg(Color::Rgb(14, 14, 14))
         };
 
