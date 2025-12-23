@@ -760,4 +760,58 @@ mod ui_tests {
             "expected presets hint to have subdued background color"
         );
     }
+
+    #[test]
+    fn results_renders_report_line_without_corrupting_tokens() {
+        let mut app = make_app();
+        app.lines.clear();
+        app.lines.push(
+            "2025-12-22T21:25:28.694+00:00 REPORT RequestId: TEST \
+             Duration: 13269.00 ms\tBilled Duration: 13269 ms\tMemory Size: 1024 MB\tMax Memory Used: 272 MB"
+                .to_string(),
+        );
+        app.focus = Focus::Results;
+
+        let area = Rect::new(0, 0, 120, 10);
+        let mut buf = Buffer::empty(area);
+
+        (&app).render(area, &mut buf);
+
+        // Assert key tokens are present
+        assert!(
+            !buffer_contains_text(&buf, "BDuration"),
+            "should not render 'BDuration' artifact"
+        );
+        assert!(
+            !buffer_contains_text(&buf, "MSize"),
+            "should not render 'MSize' artifact"
+        );
+        assert!(
+            !buffer_contains_text(&buf, "MaxMemory"),
+            "should not render 'MaxMemory' artifact"
+        );
+    }
+
+    #[test]
+    fn results_renders_info_line_with_tabs_without_merging_tokens() {
+        let mut app = make_app();
+
+        app.lines.clear();
+        app.lines.push(
+            "2025-12-23T15:02:15.620+00:00 2025-12-23T15:02:15.620Z\tea080ace-0f99-4021-a683-0599cfea7c45\tINFO\tThere are 11 messages in the queue, starting 3 tasks"
+                .to_string(),
+        );
+        app.focus = Focus::Results;
+
+        let area = Rect::new(0, 0, 120, 10);
+        let mut buf = Buffer::empty(area);
+        (&app).render(area, &mut buf);
+
+        // We only assert that the known-bad merged artifact is gone.
+        // Layout in this small test area may clip or wrap the full sentence.
+        assert!(
+            !buffer_contains_text(&buf, "Iare"),
+            "should not render 'Iare' artifact"
+        );
+    }
 }

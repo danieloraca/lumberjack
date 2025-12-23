@@ -113,5 +113,14 @@ impl App {
                 );
             }
         }
+
+        // Draw scrollbar once per frame
+        App::draw_scrollbar(
+            buf,
+            results_inner,
+            start, // first visible line index
+            total, // total number of lines
+            self.focus == crate::app::Focus::Results,
+        );
     }
 }
