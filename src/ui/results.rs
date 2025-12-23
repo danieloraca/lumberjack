@@ -113,5 +113,194 @@ impl App {
                 );
             }
         }
+
+        // Draw scrollbar once per frame
+        App::draw_scrollbar(
+            buf,
+            results_inner,
+            start, // first visible line index
+            total, // total number of lines
+            self.focus == crate::app::Focus::Results,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::style::Color;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, mpsc};
+    use std::time::Instant;
+
+    use crate::app::{App, FilterField, Focus};
+
+    fn make_results_app(lines: Vec<&str>) -> App {
+        let (tx, rx) = mpsc::channel();
+        App {
+            app_title: "Test".to_string(),
+            exit: false,
+            lines: lines.into_iter().map(|s| s.to_string()).collect(),
+            filter_cursor_pos: 0,
+
+            all_groups: vec![],
+            groups: vec![],
+            selected_group: 0,
+            groups_scroll: 0,
+
+            profile: "test".to_string(),
+            region: "eu-west-1".to_string(),
+            focus: Focus::Results,
+
+            filter_start: String::new(),
+            filter_end: String::new(),
+            filter_query: String::new(),
+            filter_field: FilterField::Query,
+            editing: false,
+            cursor_on: true,
+            last_blink: Instant::now(),
+
+            group_search_active: false,
+            group_search_input: String::new(),
+
+            search_tx: tx,
+            search_rx: rx,
+            searching: false,
+            dots: 0,
+            last_dots: Instant::now(),
+            results_scroll: 0,
+
+            tail_mode: false,
+            tail_stop: Arc::new(AtomicBool::new(false)),
+
+            status_message: None,
+            status_set_at: None,
+
+            saved_filters: Vec::new(),
+            save_filter_popup_open: false,
+            save_filter_name: String::new(),
+            load_filter_popup_open: false,
+            load_filter_selected: 0,
+        }
+    }
+
+    fn buffer_to_string(buf: &Buffer, area: Rect) -> String {
+        let mut out = String::new();
+        for y in area.y..area.y + area.height {
+            for x in area.x..area.x + area.width {
+                let ch = buf
+                    .cell((x, y))
+                    .map(|c| c.symbol())
+                    .unwrap_or(" ")
+                    .chars()
+                    .next()
+                    .unwrap_or(' ');
+                out.push(ch);
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn timestamp_coloring_preserves_message_text() {
+        let app = make_results_app(vec![
+            "2025-12-22T21:25:28.694+00:00 REPORT RequestId: TEST Duration: 10 ms Billed Duration: 11 ms Memory Size: 1024 MB Max Memory Used: 272 MB",
+        ]);
+
+        // Wide enough area so the whole line fits on one row.
+        let area = Rect::new(0, 0, 160, 3);
+        let results_inner = area;
+        let mut buf = Buffer::empty(area);
+
+        app.render_results(results_inner, &mut buf);
+
+        let rendered = buffer_to_string(&buf, area);
+
+        assert!(
+            rendered.contains("Duration: 10 ms"),
+            "expected 'Duration: 10 ms' in rendered output, got:\n{}",
+            rendered
+        );
+        assert!(
+            rendered.contains("Billed Duration: 11 ms"),
+            "expected 'Billed Duration: 11 ms' in rendered output, got:\n{}",
+            rendered
+        );
+        assert!(
+            rendered.contains("Memory Size: 1024 MB"),
+            "expected 'Memory Size: 1024 MB' in rendered output, got:\n{}",
+            rendered
+        );
+        assert!(
+            rendered.contains("Max Memory Used: 272 MB"),
+            "expected 'Max Memory Used: 272 MB' in rendered output, got:\n{}",
+            rendered
+        );
+    }
+
+    #[test]
+    fn tabs_are_expanded_without_merging_words() {
+        let app = make_results_app(vec![
+            "2025-12-23T15:02:15.620+00:00 2025-12-23T15:02:15.620Z\tea080ace-0f99-4021-a683-0599cfea7c45\tINFO\tThere are 11 messages in the queue, starting 3 tasks",
+        ]);
+
+        let area = Rect::new(0, 0, 160, 3);
+        let mut buf = Buffer::empty(area);
+        app.render_results(area, &mut buf);
+
+        let rendered = buffer_to_string(&buf, area);
+
+        // We don't enforce exact wrapping; just ensure we didn't reproduce the Iare bug.
+        assert!(
+            !rendered.contains("Iare"),
+            "should not render 'Iare' artifact, got:\n{}",
+            rendered
+        );
+        assert!(
+            rendered.contains("INFO"),
+            "expected 'INFO' token in rendered output, got:\n{}",
+            rendered
+        );
+        assert!(
+            rendered.contains("There are 11 messages in the queue"),
+            "expected 'There are 11 messages in the queue' in rendered output, got:\n{}",
+            rendered
+        );
+    }
+
+    #[test]
+    fn draws_scrollbar_when_multiple_lines() {
+        // Enough lines to require scrolling
+        let mut lines = Vec::new();
+        for i in 0..20 {
+            lines.push(format!("2025-12-22T21:25:{:02}.000+00:00 line {}", i, i));
+        }
+        let app = make_results_app(lines.iter().map(|s| s.as_str()).collect());
+
+        let area = Rect::new(0, 0, 40, 5);
+        let mut buf = Buffer::empty(area);
+
+        app.render_results(area, &mut buf);
+
+        // Rightmost column should contain at least one scrollbar thumb '█' or track '│'
+        let x = area.x + area.width - 1;
+        let mut has_scroll_glyph = false;
+        for y in area.y..area.y + area.height {
+            if let Some(cell) = buf.cell((x, y)) {
+                let sym = cell.symbol();
+                if sym == "│" || sym == "█" {
+                    has_scroll_glyph = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(
+            has_scroll_glyph,
+            "expected scrollbar glyphs in rightmost column, but none were found"
+        );
     }
 }
