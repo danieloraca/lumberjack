@@ -70,3 +70,33 @@ pub fn pane_border(focus: bool) -> Style {
 pub fn default_gray() -> Style {
     Style::default().fg(Color::Gray)
 }
+
+pub fn filter_field(field_is_active: bool, editing: bool) -> Style {
+    if field_is_active {
+        if editing {
+            Style::default().bg(Color::Gray).fg(Color::Black)
+        } else {
+            Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20))
+        }
+    } else {
+        Style::default()
+            .fg(Color::Rgb(100, 100, 100))
+            .bg(Color::Rgb(20, 20, 20))
+    }
+}
+
+pub fn popup_block() -> Style {
+    Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White)
+}
+
+pub fn popup_border() -> Style {
+    Style::default().fg(Color::Yellow)
+}
+
+pub fn presets_hint() -> Style {
+    Style::default().fg(Color::Rgb(50, 50, 50))
+}
+
+pub fn cursor() -> Style {
+    Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20))
+}

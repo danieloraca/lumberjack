@@ -157,33 +157,15 @@ impl Widget for &App {
 
         let mut row_y = filter_inner.y;
 
-        let field_style =
-            |field: FilterField, focus: Focus, current: FilterField, editing: bool| {
-                if focus == Focus::Filter && field == current {
-                    if editing {
-                        // actively editing → strong highlight
-                        Style::default().bg(Color::Gray).fg(Color::Black)
-                    } else {
-                        // focused but not editing → white
-                        Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20))
-                    }
-                } else {
-                    // unfocused field
-                    Style::default()
-                        .fg(Color::Rgb(100, 100, 100))
-                        .bg(Color::Rgb(20, 20, 20))
-                }
-            };
+        let field_style = |field: FilterField| {
+            let active = self.focus == Focus::Filter && field == self.filter_field;
+            styles::filter_field(active, active && self.editing)
+        };
 
         let line = |label: &str, value: &str| format!("{label}: {value}");
 
         Line::from(line("Start", &self.filter_start))
-            .style(field_style(
-                FilterField::Start,
-                self.focus,
-                self.filter_field,
-                self.editing,
-            ))
+            .style(field_style(FilterField::Start))
             .render(
                 Rect {
                     x: filter_inner.x,
@@ -196,12 +178,7 @@ impl Widget for &App {
         row_y += 1;
 
         Line::from(line("End", &self.filter_end))
-            .style(field_style(
-                FilterField::End,
-                self.focus,
-                self.filter_field,
-                self.editing,
-            ))
+            .style(field_style(FilterField::End))
             .render(
                 Rect {
                     x: filter_inner.x,
@@ -214,12 +191,7 @@ impl Widget for &App {
         row_y += 1;
 
         Line::from(line("Query", &self.filter_query))
-            .style(field_style(
-                FilterField::Query,
-                self.focus,
-                self.filter_field,
-                self.editing,
-            ))
+            .style(field_style(FilterField::Query))
             .render(
                 Rect {
                     x: filter_inner.x,
@@ -270,8 +242,7 @@ impl Widget for &App {
 
                 // draw a vertical bar cursor
                 if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.set_char('▏')
-                        .set_style(Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20)));
+                    cell.set_char('▏').set_style(styles::cursor());
                 }
             }
         }
@@ -279,12 +250,7 @@ impl Widget for &App {
         // "button"
         let btn = "[ Search ]";
         Line::from(btn)
-            .style(field_style(
-                FilterField::Search,
-                self.focus,
-                self.filter_field,
-                false,
-            ))
+            .style(field_style(FilterField::Search))
             .render(
                 Rect {
                     x: filter_inner.x,
@@ -305,7 +271,7 @@ impl Widget for &App {
         let presets_x = filter_inner.x + pane_width.saturating_sub(text_width);
 
         Line::from(presets_text)
-            .style(Style::default().fg(Color::Rgb(50, 50, 50)))
+            .style(styles::presets_hint())
             .render(
                 Rect {
                     x: presets_x,
@@ -333,8 +299,8 @@ impl Widget for &App {
 
             let block = Block::bordered()
                 .title("Save filter")
-                .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White))
-                .border_style(Style::default().fg(Color::Yellow));
+                .style(styles::popup_block())
+                .border_style(styles::popup_border());
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
@@ -353,17 +319,15 @@ impl Widget for &App {
                 );
 
             let name_line = format!("{}", self.save_filter_name);
-            Line::from(name_line)
-                .style(Style::default().fg(Color::Yellow))
-                .render(
-                    Rect {
-                        x: inner.x,
-                        y: inner.y + 1,
-                        width: inner.width,
-                        height: 1,
-                    },
-                    buf,
-                );
+            Line::from(name_line).style(styles::popup_border()).render(
+                Rect {
+                    x: inner.x,
+                    y: inner.y + 1,
+                    width: inner.width,
+                    height: 1,
+                },
+                buf,
+            );
 
             // Hint line
             Line::from("Enter Save   Esc Cancel")
@@ -397,8 +361,8 @@ impl Widget for &App {
 
             let block = Block::bordered()
                 .title("Load filter")
-                .style(Style::default().bg(Color::Rgb(30, 30, 30)).fg(Color::White))
-                .border_style(Style::default().fg(Color::Yellow));
+                .style(styles::popup_block())
+                .border_style(styles::popup_border());
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
@@ -416,7 +380,7 @@ impl Widget for &App {
                 };
                 let line = format!("{marker} {}", f.name);
                 let style = if idx == self.load_filter_selected {
-                    Style::default().fg(Color::Yellow)
+                    styles::popup_border()
                 } else {
                     Style::default().fg(Color::White)
                 };
