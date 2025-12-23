@@ -1,4 +1,5 @@
 mod results;
+mod styles;
 
 use ratatui::layout::{Constraint, Layout};
 use ratatui::prelude::Rect;
@@ -18,37 +19,19 @@ impl Widget for &App {
         ])
         .split(area);
 
-        let groups_item_style = if self.focus == Focus::Groups {
-            Style::default().bg(Color::Black).fg(Color::White)
-        } else {
-            Style::default()
-                .bg(Color::Rgb(14, 14, 14))
-                .fg(Color::Rgb(140, 140, 140))
-        };
+        let header_style = styles::header();
+        let footer_style = styles::footer();
 
-        let groups_selected_style = if self.focus == Focus::Groups {
-            Style::default()
-                .bg(Color::Rgb(40, 40, 40))
-                .fg(Color::White)
-                .add_modifier(ratatui::style::Modifier::BOLD)
-        } else {
-            Style::default().bg(Color::Rgb(18, 18, 18)).fg(Color::White) // still readable while unfocused
-        };
+        let groups_block_style = styles::groups_block(self.focus == Focus::Groups);
+        let filter_block_style = styles::filter_block(self.focus == Focus::Filter);
+        let results_block_style = styles::results_block(self.focus == Focus::Results);
 
-        let header_style = Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White);
-        let footer_style = Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::Gray);
+        let groups_item_style = styles::group_item(self.focus == Focus::Groups);
+        let groups_selected_style = styles::groups_selected(self.focus == Focus::Groups);
 
-        let groups_border = if self.focus == Focus::Groups {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default()
-        };
-
-        let filter_border = if self.focus == Focus::Filter {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default()
-        };
+        let groups_border = styles::pane_border(self.focus == Focus::Groups);
+        let filter_border = styles::pane_border(self.focus == Focus::Filter);
+        let results_border = styles::pane_border(self.focus == Focus::Results);
 
         buf.set_style(chunks[0], header_style);
         buf.set_style(chunks[3], footer_style);
@@ -99,14 +82,6 @@ impl Widget for &App {
             .style(footer_style)
             .render(footer[1], buf);
 
-        let groups_block_style = if self.focus == Focus::Groups {
-            Style::default().bg(Color::Black).fg(Color::White)
-        } else {
-            Style::default()
-                .bg(Color::Rgb(14, 14, 14))
-                .fg(Color::Rgb(140, 140, 140))
-        };
-
         let groups_block = Block::bordered()
             .title("Groups")
             .style(groups_block_style)
@@ -114,14 +89,6 @@ impl Widget for &App {
 
         let inner = groups_block.inner(groups_row[0]);
         groups_block.render(groups_row[0], buf);
-
-        let filter_block_style = if self.focus == Focus::Filter {
-            Style::default().bg(Color::Rgb(20, 20, 20)).fg(Color::White)
-        } else {
-            Style::default()
-                .bg(Color::Rgb(20, 20, 20))
-                .fg(Color::Rgb(140, 140, 140))
-        };
 
         let filter_block = Block::bordered()
             .title("Filter")
@@ -131,26 +98,11 @@ impl Widget for &App {
         let filter_inner = filter_block.inner(groups_row[1]);
         filter_block.render(groups_row[1], buf);
 
-        let results_border = if self.focus == Focus::Results {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default()
-        };
-
-        let results_block_style = if self.focus == Focus::Results {
-            Style::default().bg(Color::Rgb(5, 5, 5)).fg(Color::White)
-        } else {
-            Style::default()
-                .bg(Color::Rgb(14, 14, 14))
-                .fg(Color::Rgb(140, 140, 140))
-        };
-
         let results_block = Block::bordered()
             .title("Results")
             .style(results_block_style)
             .border_style(results_border);
 
-        // results_block.render(chunks[2], buf);
         let results_inner = results_block.inner(chunks[2]);
         results_block.render(chunks[2], buf);
 
@@ -186,29 +138,19 @@ impl Widget for &App {
             let dots = ".".repeat(self.dots);
             let msg = format!("Searching{dots}");
 
-            Line::from(msg)
-                .style(Style::default().fg(Color::Gray))
-                .render(
-                    Rect {
-                        x: results_inner.x,
-                        y: results_inner.y,
-                        width: results_inner.width,
-                        height: 1,
-                    },
-                    buf,
-                );
+            Line::from(msg).style(styles::default_gray()).render(
+                Rect {
+                    x: results_inner.x,
+                    y: results_inner.y,
+                    width: results_inner.width,
+                    height: 1,
+                },
+                buf,
+            );
 
             // stop here so we don't render stale lines underneath
             return;
         }
-
-        let results_block = Block::bordered()
-            .title("Results")
-            .style(results_block_style)
-            .border_style(results_border);
-
-        let results_inner = results_block.inner(chunks[2]);
-        results_block.render(chunks[2], buf);
 
         // Call the refactored renderer
         self.render_results(results_inner, buf);
