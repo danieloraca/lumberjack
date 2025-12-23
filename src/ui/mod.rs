@@ -213,6 +213,49 @@ impl Widget for &App {
         // Call the refactored renderer
         self.render_results(results_inner, buf);
 
+        // JSON popup overlay (on top of main UI)
+        if self.json_popup_open {
+            // Centered popup: 70% width and height
+            let popup_area = Layout::vertical([
+                Constraint::Percentage(15),
+                Constraint::Percentage(70),
+                Constraint::Percentage(15),
+            ])
+            .split(area)[1];
+
+            let popup_chunks = Layout::horizontal([
+                Constraint::Percentage(15),
+                Constraint::Percentage(70),
+                Constraint::Percentage(15),
+            ])
+            .split(popup_area);
+
+            let popup_rect = popup_chunks[1];
+
+            // Fill popup area with a solid background, similar to other popups
+            let popup_bg = Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White);
+            for y in popup_rect.y..popup_rect.y + popup_rect.height {
+                for x in popup_rect.x..popup_rect.x + popup_rect.width {
+                    if let Some(cell) = buf.cell_mut((x, y)) {
+                        cell.set_char(' ').set_style(popup_bg);
+                    }
+                }
+            }
+
+            let popup_block = Block::bordered()
+                .title("JSON")
+                .style(popup_bg)
+                .border_style(Style::default().fg(Color::Yellow));
+
+            let popup_inner = popup_block.inner(popup_rect);
+            popup_block.render(popup_rect, buf);
+
+            ratatui::widgets::Paragraph::new(self.json_popup_content.as_str())
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .style(popup_bg)
+                .render(popup_inner, buf);
+        }
+
         let mut row_y = filter_inner.y;
 
         let field_style =
@@ -557,6 +600,10 @@ mod ui_tests {
             tail_stop: Arc::new(AtomicBool::new(false)),
             status_message: None,
             status_set_at: None,
+
+            // JSON popup defaults
+            json_popup_open: false,
+            json_popup_content: String::new(),
 
             saved_filters: Vec::new(),
             save_filter_popup_open: false,
