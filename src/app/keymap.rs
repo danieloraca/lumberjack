@@ -21,6 +21,17 @@ impl App {
             return Ok(());
         }
 
+        // JSON popup has highest priority once open.
+        if self.json_popup_open {
+            match key_event.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.close_json_popup();
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
         match key_event.code {
             // q should NOT quit while editing or while group search is active
             KeyCode::Char('q') if !self.editing && !self.group_search_active => {
@@ -149,6 +160,19 @@ impl App {
                 self.copy_results_to_clipboard();
             }
 
+            // Open JSON popup for current Results line (Results pane, not editing)
+            KeyCode::Char('j') if !self.editing && self.focus == Focus::Results => {
+                if let Some(line) = self.lines.get(self.results_scroll).cloned() {
+                    // Heuristic: try to find a JSON object/array starting point
+                    let msg_part = line
+                        .find('{')
+                        .or_else(|| line.find('['))
+                        .map(|idx| &line[idx..])
+                        .unwrap_or(line.as_str());
+                    self.open_json_popup(msg_part);
+                }
+            }
+
             // Toggle tail mode
             KeyCode::Char('t') if !self.editing && !self.group_search_active => {
                 self.tail_mode = !self.tail_mode;
@@ -251,6 +275,10 @@ mod tests {
 
             status_message: None,
             status_set_at: None,
+
+            // JSON popup defaults
+            json_popup_open: false,
+            json_popup_content: String::new(),
 
             saved_filters: Vec::new(),
             save_filter_popup_open: false,

@@ -173,10 +173,14 @@ mod tests {
             results_scroll: 0,
 
             tail_mode: false,
-            tail_stop: Arc::new(AtomicBool::new(false)),
+            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
 
             status_message: None,
             status_set_at: None,
+
+            // JSON popup defaults
+            json_popup_open: false,
+            json_popup_content: String::new(),
 
             saved_filters: Vec::new(),
             save_filter_popup_open: false,
