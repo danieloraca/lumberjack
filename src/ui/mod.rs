@@ -1,3 +1,5 @@
+mod results;
+
 use ratatui::layout::{Constraint, Layout};
 use ratatui::prelude::Rect;
 use ratatui::style::{Color, Style, Stylize};
@@ -200,100 +202,16 @@ impl Widget for &App {
             return;
         }
 
-        let mut all_lines: Vec<&str> = Vec::new();
-        for entry in &self.lines {
-            for l in entry.lines() {
-                all_lines.push(l);
-            }
-        }
+        let results_block = Block::bordered()
+            .title("Results")
+            .style(results_block_style)
+            .border_style(results_border);
 
-        let scrollbar_w = 1u16;
-        let text_area = Rect {
-            x: results_inner.x,
-            y: results_inner.y,
-            width: results_inner.width.saturating_sub(scrollbar_w),
-            height: results_inner.height,
-        };
+        let results_inner = results_block.inner(chunks[2]);
+        results_block.render(chunks[2], buf);
 
-        let height = text_area.height as usize;
-        let start = self.results_scroll;
-        let end = (start + height).min(all_lines.len());
-
-        for (i, line) in all_lines[start..end].iter().enumerate() {
-            let y = text_area.y + i as u16;
-
-            // Heuristic: line starts with something RFC3339-ish, e.g. 2025-12-21T16:11:00+00:00
-            let looks_like_ts = line.len() >= 20
-                && line.chars().nth(4) == Some('-')
-                && line.chars().nth(7) == Some('-')
-                && line.chars().nth(10) == Some('T')
-                && (line.ends_with('Z') || line.contains('+'));
-
-            if looks_like_ts {
-                // Split into "timestamp" and "rest" so we can style them differently.
-                // If there is no space, treat the whole line as the timestamp.
-                let (ts, rest_opt) = match line.split_once(' ') {
-                    Some((ts, rest)) => (ts, Some(rest)),
-                    None => (*line, None),
-                };
-
-                let ts_style = Style::default()
-                    .fg(Color::Rgb(100, 180, 180))
-                    .bg(Color::Rgb(5, 5, 5))
-                    .add_modifier(ratatui::style::Modifier::BOLD);
-
-                // Render timestamp "column"
-                let ts_width = ts.len() as u16;
-                Line::from(ts).style(ts_style).render(
-                    Rect {
-                        x: text_area.x,
-                        y,
-                        width: ts_width.min(text_area.width),
-                        height: 1,
-                    },
-                    buf,
-                );
-
-                // Render message "column" after a small gap, if any
-                if let Some(rest) = rest_opt {
-                    let gap = 2u16;
-                    let msg_x = text_area.x + ts_width.saturating_add(gap);
-                    if msg_x < text_area.x + text_area.width {
-                        let available = (text_area.x + text_area.width) - msg_x;
-                        Line::from(rest).render(
-                            Rect {
-                                x: msg_x,
-                                y,
-                                width: available,
-                                height: 1,
-                            },
-                            buf,
-                        );
-                    }
-                }
-
-                continue;
-            }
-
-            // Fallback: render the whole line normally
-            Line::from(*line).render(
-                Rect {
-                    x: text_area.x,
-                    y,
-                    width: text_area.width,
-                    height: 1,
-                },
-                buf,
-            );
-        }
-
-        App::draw_scrollbar(
-            buf,
-            results_inner,
-            self.results_scroll,
-            all_lines.len(),
-            self.focus == Focus::Results,
-        );
+        // Call the refactored renderer
+        self.render_results(results_inner, buf);
 
         let mut row_y = filter_inner.y;
 
