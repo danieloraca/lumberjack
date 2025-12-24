@@ -400,7 +400,7 @@ impl Widget for &App {
 
             // Hint line at the bottom of the popup
             Line::from("Enter Load   Esc Cancel")
-                .style(Style::default().fg(Color::Gray))
+                .style(styles::default_gray())
                 .render(
                     Rect {
                         x: inner.x,
