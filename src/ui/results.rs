@@ -127,10 +127,8 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
-    use ratatui::style::Color;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, mpsc};
     use std::time::Instant;
