@@ -1,5 +1,7 @@
-<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/8d240a0a-61e2-4c01-8078-9f9b837d762b" />
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/586133de-abd0-4427-98cb-6dd5bd59f290" />
+
 ![Rust](https://github.com/danieloraca/lumberjack/actions/workflows/test.yml/badge.svg)
+
 **Lumberjack** is a 2026‑grade terminal UI (TUI) for browsing and searching **AWS CloudWatch Logs** — fast, keyboard‑driven, and unapologetically anti-click.
 
 It lets you:
