@@ -68,6 +68,8 @@ fn main() -> io::Result<()> {
         status_message: None,
         status_set_at: None,
 
+        json_popup_open: false,
+        json_popup_content: String::new(),
         saved_filters: Vec::new(),
         save_filter_popup_open: false,
         save_filter_name: String::new(),

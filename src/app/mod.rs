@@ -80,6 +80,10 @@ pub struct App {
     pub status_message: Option<String>,
     pub status_set_at: Option<Instant>,
 
+    // JSON popup state for viewing pretty-printed JSON logs
+    pub json_popup_open: bool,
+    pub json_popup_content: String,
+
     pub saved_filters: Vec<SavedFilter>,
 
     pub save_filter_popup_open: bool,
@@ -90,6 +94,29 @@ pub struct App {
 }
 
 impl App {
+    /// Open the JSON popup with pretty-printed content, if `raw` parses as JSON.
+    /// Falls back to the original string on parse/format errors.
+    pub fn open_json_popup(&mut self, raw: &str) {
+        // Try to parse as JSON first
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Ok(pretty) = serde_json::to_string_pretty(&value) {
+                self.json_popup_content = pretty;
+            } else {
+                self.json_popup_content = raw.to_string();
+            }
+        } else {
+            // Not valid JSON; just show the raw string
+            self.json_popup_content = raw.to_string();
+        }
+        self.json_popup_open = true;
+    }
+
+    /// Close the JSON popup, if open.
+    pub fn close_json_popup(&mut self) {
+        self.json_popup_open = false;
+        self.json_popup_content.clear();
+    }
+
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             if self.focus == Focus::Filter && self.editing {
@@ -529,6 +556,9 @@ mod tests {
 
             status_message: None,
             status_set_at: None,
+
+            json_popup_open: false,
+            json_popup_content: String::new(),
 
             saved_filters: Vec::new(),
             save_filter_popup_open: false,
