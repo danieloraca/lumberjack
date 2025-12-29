@@ -1,22 +1,22 @@
 # 🪓 Lumberjack
 ![Rust](https://github.com/danieloraca/lumberjack/actions/workflows/test.yml/badge.svg)
 
-**Lumberjack** is a terminal UI (TUI) for browsing and searching **AWS CloudWatch Logs**.
+**Lumberjack** is a 2026‑grade terminal UI (TUI) for browsing and searching **AWS CloudWatch Logs** — fast, keyboard‑driven, and unapologetically anti-click.
 
 It lets you:
-- Browse and fuzzy-search log groups
-- Filter logs by time range and pattern
-- Stream and scroll results
-- Pretty-print embedded JSON logs
-- Stay entirely in the terminal
+- Browse and fuzzy-search log groups like TV channels
+- Filter logs by time range and pattern with human‑friendly input (`-5m`, `-30s`, `-1h`)
+- Stream and scroll results in a proper `tail -f` style TUI
+- Stay entirely in the terminal — no tabs, no spinners, no surprise “new UI” toggles
 
 Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for Rust**.
 
 ---
 
-## Features
+## Features (a.k.a. Why Not Just Use The Console?)
 
-- 📂 Log group browser (scrollable, with `/` fuzzy search)
+- 📂 Log group browser (scrollable, with `/` fuzzy search)  
+  Flip through log groups like channels, without waiting for a web app to boot.
 - 🔍 Filter logs by:
   - Start time
   - End time
@@ -27,17 +27,24 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - Saved presets:
     - Save current filter: `s` (give it a name; saved to `~/.config/lumberjack/filters.json`)
     - Load saved filter: `F` (open popup, select by name)
+    - Treat them like log mixtapes: “last-hour-errors”, “weird-timeouts”, “that-one-tenant”.
 - ⏱ Time parsing with friendly input
   - Absolute: `2025-12-11T10:00:00Z` or `2025-12-11 10:00:00`
-  - Relative: `-5m`, `-1h`, `-1d` (relative to now)
-- 🧾 Pretty-printed JSON output
-- 📜 Scrollable results with scrollbar
+  - Relative: `-30s`, `-5m`, `-1h`, `-1d` (relative to now)
+- 🧾 JSON-friendly output
+  - Keeps underlying log lines intact for copying
+  - Designed to play nicely with large, structured payloads
+- 📜 Scrollable results with a real scrollbar (no infinite-scroll roulette)
 - ⌨️ Keyboard-driven UI
-- 🌑 Focus-aware panes (Groups / Filter / Results)
+  - `/` fuzzy-search groups
+  - `1/2/3/4` for time presets
+  - `t` to tail
+  - `y` to copy all results
+- 🌑 Focus-aware panes (Groups / Filter / Results) with clear borders and styles
 
 ---
 
-## Requirements
+## Requirements (2026 Edition)
 
 - Rust (stable)
 - AWS credentials configured locally  
