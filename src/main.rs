@@ -7,6 +7,7 @@ mod app;
 mod aws;
 mod ui;
 
+use crate::ui::styles::Theme;
 use app::{App, FilterField, Focus};
 use aws::fetch_log_groups;
 
@@ -35,6 +36,8 @@ fn main() -> io::Result<()> {
 
     let mut app = App {
         app_title: APP_TITLE.to_string(),
+        theme: Theme::default_dark(),
+        theme_name: "dark".to_string(),
         exit: false,
         lines: Vec::new(),
         filter_cursor_pos: 0,

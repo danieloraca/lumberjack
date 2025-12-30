@@ -1,8 +1,6 @@
-use std::time::Instant;
-
-use arboard::Clipboard;
-
 use crate::app::App;
+use arboard::Clipboard;
+use std::time::Instant;
 
 impl App {
     pub fn results_text(&self) -> String {
@@ -28,6 +26,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::{App, FilterField, Focus};
+    use crate::ui::styles::Theme;
     use std::sync::mpsc;
     use std::time::Instant as StdInstant;
 
@@ -36,6 +35,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
             filter_cursor_pos: 0,

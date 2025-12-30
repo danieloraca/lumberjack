@@ -40,6 +40,11 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - `1/2/3/4` for time presets
   - `t` to tail
   - `y` to copy all results
+  - `T` to cycle color themes (Dark → Light → Green CRT)
+- 🎨 Theme support
+  - Dark (default)
+  - Light
+  - Retro Green CRT (phosphor-style, neon green on black)
 - 🌑 Focus-aware panes (Groups / Filter / Results) with clear borders and styles
 
 ---
@@ -79,6 +84,7 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `s` – Save current filter (opens name popup; persists to `~/.config/lumberjack/filters.json`)
 - `F` – Load saved filter (opens popup with saved filter names)
 - `t` – Toggle tail/stream mode for results
+- `T` – Cycle color themes (Dark → Light → Green CRT)
 - `Esc` – Cancel editing, group search, or close popups
 - `y` – Copy all Results to clipboard (when Results pane is focused)
 - `q` – Quit (except while editing or in group search)

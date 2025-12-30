@@ -187,6 +187,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::{App, Focus};
+    use crate::ui::styles::Theme;
     use std::sync::mpsc;
     use std::time::Instant as StdInstant;
 
@@ -195,6 +196,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,

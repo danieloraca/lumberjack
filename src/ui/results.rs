@@ -134,11 +134,14 @@ mod tests {
     use std::time::Instant;
 
     use crate::app::{App, FilterField, Focus};
+    use crate::ui::styles::Theme;
 
     fn make_results_app(lines: Vec<&str>) -> App {
         let (tx, rx) = mpsc::channel();
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
             filter_cursor_pos: 0,

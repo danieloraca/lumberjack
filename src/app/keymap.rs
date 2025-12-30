@@ -1,4 +1,5 @@
 use super::{App, FilterField, Focus};
+use crate::ui::styles::Theme;
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use std::io;
 
@@ -192,6 +193,19 @@ impl App {
                 self.apply_time_preset("-24m");
             }
 
+            KeyCode::Char('T') if !self.editing => {
+                if self.theme_name == "dark" {
+                    self.theme = Theme::light();
+                    self.theme_name = "light".to_string();
+                } else if self.theme_name == "light" {
+                    self.theme = Theme::green();
+                    self.theme_name = "green".to_string();
+                } else {
+                    self.theme = Theme::default_dark();
+                    self.theme_name = "dark".to_string();
+                }
+            }
+
             _ => {}
         }
 
@@ -202,6 +216,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::{App, FilterField, Focus};
+    use crate::ui::styles::Theme;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::sync::mpsc;
     use std::time::Instant as StdInstant;
@@ -215,6 +230,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,
@@ -283,5 +300,24 @@ mod tests {
         app.handle_key_event(key(KeyCode::Backspace)).unwrap();
         assert_eq!(app.filter_query, "abc");
         assert_eq!(app.filter_cursor_pos, 2); // back between 'b' and 'c'
+    }
+
+    #[test]
+    fn theme_cycles_dark_light_green_on_t() {
+        let mut app = app_with_filter_query("");
+        // Ensure starting theme is dark
+        assert_eq!(app.theme_name, "dark");
+
+        // First T: dark -> light
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "light");
+
+        // Second T: light -> green
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "green");
+
+        // Third T: green -> dark
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "dark");
     }
 }
