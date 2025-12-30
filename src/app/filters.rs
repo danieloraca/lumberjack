@@ -187,6 +187,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::{App, Focus};
+    use crate::ui::styles::Theme;
     use std::sync::mpsc;
     use std::time::Instant as StdInstant;
 

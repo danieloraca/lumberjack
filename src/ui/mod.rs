@@ -8,7 +8,6 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Widget};
 
 use crate::app::{App, FilterField, Focus};
-use crate::ui::styles::Theme;
 
 impl Widget for &App {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
@@ -419,6 +418,7 @@ impl Widget for &App {
 #[cfg(test)]
 mod ui_tests {
     use super::*;
+    use crate::ui::styles::Theme;
     use ratatui::{buffer::Buffer, layout::Rect};
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, mpsc};

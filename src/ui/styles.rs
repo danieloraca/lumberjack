@@ -1,5 +1,4 @@
-use crate::app::Focus;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 
 #[derive(Clone, Debug)]
 pub struct Theme {

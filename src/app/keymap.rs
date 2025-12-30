@@ -213,6 +213,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use crate::app::{App, FilterField, Focus};
+    use crate::ui::styles::Theme;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::sync::mpsc;
     use std::time::Instant as StdInstant;
