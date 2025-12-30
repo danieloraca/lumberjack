@@ -1,4 +1,20 @@
-use ratatui::style::{Color, Style};
+use crate::app::Focus;
+use ratatui::style::{Color, Modifier, Style};
+
+#[derive(Clone, Debug)]
+pub struct Theme {
+    pub header: Style,
+    pub footer: Style,
+}
+
+impl Theme {
+    pub fn default_dark() -> Self {
+        Theme {
+            header: Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White),
+            footer: Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::Gray),
+        }
+    }
+}
 
 pub fn header() -> Style {
     Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White)

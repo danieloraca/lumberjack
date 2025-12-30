@@ -8,9 +8,11 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Widget};
 
 use crate::app::{App, FilterField, Focus};
+use crate::ui::styles::Theme;
 
 impl Widget for &App {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        let theme = Theme::default_dark();
         let chunks = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(6),
@@ -19,8 +21,8 @@ impl Widget for &App {
         ])
         .split(area);
 
-        let header_style = styles::header();
-        let footer_style = styles::footer();
+        let header_style = theme.header;
+        let footer_style = theme.footer;
 
         let groups_block_style = styles::groups_block(self.focus == Focus::Groups);
         let filter_block_style = styles::filter_block(self.focus == Focus::Filter);
