@@ -14,14 +14,17 @@ impl Theme {
             footer: Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::Gray),
         }
     }
-}
 
-pub fn header() -> Style {
-    Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::White)
-}
-
-pub fn footer() -> Style {
-    Style::default().bg(Color::Rgb(10, 10, 10)).fg(Color::Gray)
+    pub fn light() -> Self {
+        Theme {
+            header: Style::default()
+                .bg(Color::Rgb(240, 240, 240))
+                .fg(Color::Black),
+            footer: Style::default()
+                .bg(Color::Rgb(240, 240, 240))
+                .fg(Color::Black),
+        }
+    }
 }
 
 pub fn groups_block(focus: bool) -> Style {

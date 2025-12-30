@@ -1,4 +1,5 @@
 use super::{App, FilterField, Focus};
+use crate::ui::styles::Theme;
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use std::io;
 
@@ -192,6 +193,16 @@ impl App {
                 self.apply_time_preset("-24m");
             }
 
+            KeyCode::Char('T') if !self.editing => {
+                if self.theme_name == "dark" {
+                    self.theme = Theme::light();
+                    self.theme_name = "light".to_string();
+                } else {
+                    self.theme = Theme::default_dark();
+                    self.theme_name = "dark".to_string();
+                }
+            }
+
             _ => {}
         }
 
@@ -215,6 +226,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,

@@ -3,6 +3,7 @@ use std::time::Instant;
 use arboard::Clipboard;
 
 use crate::app::App;
+use crate::ui::styles::Theme;
 
 impl App {
     pub fn results_text(&self) -> String {
@@ -36,6 +37,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
             filter_cursor_pos: 0,

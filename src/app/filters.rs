@@ -195,6 +195,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,

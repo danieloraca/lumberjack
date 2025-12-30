@@ -1,5 +1,5 @@
 mod results;
-mod styles;
+pub mod styles;
 
 use ratatui::layout::{Constraint, Layout};
 use ratatui::prelude::Rect;
@@ -12,7 +12,7 @@ use crate::ui::styles::Theme;
 
 impl Widget for &App {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
-        let theme = Theme::default_dark();
+        let theme = self.theme.clone();
         let chunks = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(6),
@@ -430,6 +430,8 @@ mod ui_tests {
 
         App {
             app_title: "lumberjack".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: vec![],
             filter_cursor_pos: 0,

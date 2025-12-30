@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
+use crate::ui::styles::Theme;
 use chrono::Utc;
 use ratatui::crossterm::event;
 use ratatui::prelude::Rect;
@@ -43,6 +44,8 @@ pub struct SavedFilter {
 
 pub struct App {
     pub app_title: String,
+    pub theme: Theme,
+    pub theme_name: String,
     pub exit: bool,
     pub lines: Vec<String>,
     pub filter_cursor_pos: usize,
@@ -493,6 +496,8 @@ mod tests {
 
         App {
             app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
             exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,
