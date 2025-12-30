@@ -23,16 +23,16 @@ impl Widget for &App {
         let header_style = theme.header;
         let footer_style = theme.footer;
 
-        let groups_block_style = styles::groups_block(self.focus == Focus::Groups);
-        let filter_block_style = styles::filter_block(self.focus == Focus::Filter);
-        let results_block_style = styles::results_block(self.focus == Focus::Results);
+        let groups_block_style = styles::groups_block(&theme, self.focus == Focus::Groups);
+        let filter_block_style = styles::filter_block(&theme, self.focus == Focus::Filter);
+        let results_block_style = styles::results_block(&theme, self.focus == Focus::Results);
 
-        let groups_item_style = styles::group_item(self.focus == Focus::Groups);
-        let groups_selected_style = styles::groups_selected(self.focus == Focus::Groups);
+        let groups_item_style = styles::group_item(&theme, self.focus == Focus::Groups);
+        let groups_selected_style = styles::groups_selected(&theme, self.focus == Focus::Groups);
 
-        let groups_border = styles::pane_border(self.focus == Focus::Groups);
-        let filter_border = styles::pane_border(self.focus == Focus::Filter);
-        let results_border = styles::pane_border(self.focus == Focus::Results);
+        let groups_border = styles::pane_border(&theme, self.focus == Focus::Groups);
+        let filter_border = styles::pane_border(&theme, self.focus == Focus::Filter);
+        let results_border = styles::pane_border(&theme, self.focus == Focus::Results);
 
         buf.set_style(chunks[0], header_style);
         buf.set_style(chunks[3], footer_style);
@@ -139,7 +139,7 @@ impl Widget for &App {
             let dots = ".".repeat(self.dots);
             let msg = format!("Searching{dots}");
 
-            Line::from(msg).style(styles::default_gray()).render(
+            Line::from(msg).style(styles::default_gray(&theme)).render(
                 Rect {
                     x: results_inner.x,
                     y: results_inner.y,
@@ -160,7 +160,7 @@ impl Widget for &App {
 
         let field_style = |field: FilterField| {
             let active = self.focus == Focus::Filter && field == self.filter_field;
-            styles::filter_field(active, active && self.editing)
+            styles::filter_field(&theme, active, active && self.editing)
         };
 
         let line = |label: &str, value: &str| format!("{label}: {value}");
@@ -243,7 +243,7 @@ impl Widget for &App {
 
                 // draw a vertical bar cursor
                 if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.set_char('▏').set_style(styles::cursor());
+                    cell.set_char('▏').set_style(styles::cursor(&theme));
                 }
             }
         }
@@ -272,7 +272,7 @@ impl Widget for &App {
         let presets_x = filter_inner.x + pane_width.saturating_sub(text_width);
 
         Line::from(presets_text)
-            .style(styles::presets_hint())
+            .style(styles::presets_hint(&theme))
             .render(
                 Rect {
                     x: presets_x,
@@ -300,8 +300,8 @@ impl Widget for &App {
 
             let block = Block::bordered()
                 .title("Save filter")
-                .style(styles::popup_block())
-                .border_style(styles::popup_border());
+                .style(styles::popup_block(&theme))
+                .border_style(styles::popup_border(&theme));
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
@@ -320,15 +320,17 @@ impl Widget for &App {
                 );
 
             let name_line = format!("{}", self.save_filter_name);
-            Line::from(name_line).style(styles::popup_border()).render(
-                Rect {
-                    x: inner.x,
-                    y: inner.y + 1,
-                    width: inner.width,
-                    height: 1,
-                },
-                buf,
-            );
+            Line::from(name_line)
+                .style(styles::popup_border(&theme))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y + 1,
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
 
             // Hint line
             Line::from("Enter Save   Esc Cancel")
@@ -362,8 +364,8 @@ impl Widget for &App {
 
             let block = Block::bordered()
                 .title("Load filter")
-                .style(styles::popup_block())
-                .border_style(styles::popup_border());
+                .style(styles::popup_block(&theme))
+                .border_style(styles::popup_border(&theme));
             let inner = block.inner(popup_area);
             block.render(popup_area, buf);
 
@@ -381,7 +383,7 @@ impl Widget for &App {
                 };
                 let line = format!("{marker} {}", f.name);
                 let style = if idx == self.load_filter_selected {
-                    styles::popup_border()
+                    styles::popup_border(&theme)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -401,7 +403,7 @@ impl Widget for &App {
 
             // Hint line at the bottom of the popup
             Line::from("Enter Load   Esc Cancel")
-                .style(styles::default_gray())
+                .style(styles::default_gray(&theme))
                 .render(
                     Rect {
                         x: inner.x,
