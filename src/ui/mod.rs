@@ -728,4 +728,30 @@ mod ui_tests {
             "should not render 'Iare' artifact"
         );
     }
+
+    #[test]
+    fn header_and_footer_use_current_theme() {
+        let mut app = make_app(); // starts with Theme::default_dark()
+        let area = Rect::new(0, 0, 80, 10);
+
+        // Render with dark theme
+        let mut buf_dark = Buffer::empty(area);
+        (&app).render(area, &mut buf_dark);
+
+        // Switch to light theme
+        app.theme = crate::ui::styles::Theme::light();
+
+        let mut buf_light = Buffer::empty(area);
+        (&app).render(area, &mut buf_light);
+
+        // Compare a cell in the header (e.g., first column of first row)
+        let dark_cell = buf_dark.cell((area.x, area.y)).unwrap();
+        let light_cell = buf_light.cell((area.x, area.y)).unwrap();
+
+        assert_ne!(
+            dark_cell.style().bg,
+            light_cell.style().bg,
+            "expected header background to change when theme changes"
+        );
+    }
 }

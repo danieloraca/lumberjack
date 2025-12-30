@@ -301,4 +301,23 @@ mod tests {
         assert_eq!(app.filter_query, "abc");
         assert_eq!(app.filter_cursor_pos, 2); // back between 'b' and 'c'
     }
+
+    #[test]
+    fn theme_cycles_dark_light_green_on_t() {
+        let mut app = app_with_filter_query("");
+        // Ensure starting theme is dark
+        assert_eq!(app.theme_name, "dark");
+
+        // First T: dark -> light
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "light");
+
+        // Second T: light -> green
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "green");
+
+        // Third T: green -> dark
+        app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
+        assert_eq!(app.theme_name, "dark");
+    }
 }
