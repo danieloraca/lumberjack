@@ -24,6 +24,13 @@ impl Theme {
                 .fg(Color::Black),
         }
     }
+
+    pub fn green() -> Self {
+        Theme {
+            header: Style::default().bg(Color::Black).fg(Color::Rgb(0, 255, 0)),
+            footer: Style::default().bg(Color::Black).fg(Color::Rgb(0, 255, 0)),
+        }
+    }
 }
 
 pub fn groups_block(focus: bool) -> Style {

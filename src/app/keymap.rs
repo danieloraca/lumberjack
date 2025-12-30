@@ -197,6 +197,9 @@ impl App {
                 if self.theme_name == "dark" {
                     self.theme = Theme::light();
                     self.theme_name = "light".to_string();
+                } else if self.theme_name == "light" {
+                    self.theme = Theme::green();
+                    self.theme_name = "green".to_string();
                 } else {
                     self.theme = Theme::default_dark();
                     self.theme_name = "dark".to_string();
