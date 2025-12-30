@@ -142,12 +142,15 @@ impl Theme {
     pub fn green() -> Self {
         let mut t = Theme::default_dark();
 
-        let green = Color::Rgb(0, 255, 0);
+        let green = Color::Rgb(160, 255, 0);
         let dark_bg = Color::Black;
-        let band_bg = Color::Rgb(0, 80, 0);
-        let bright_bg = Color::Rgb(0, 120, 0);
+        let band_bg = Color::Rgb(0, 40, 0);
+        let bright_bg = Color::Rgb(0, 90, 0);
 
-        t.header = Style::default().bg(dark_bg).fg(green);
+        t.header = Style::default()
+            .bg(dark_bg)
+            .fg(green)
+            .add_modifier(Modifier::BOLD);
         t.footer = Style::default().bg(dark_bg).fg(green);
 
         t.groups_block_focused = Style::default().bg(dark_bg).fg(green);
@@ -159,8 +162,10 @@ impl Theme {
             .fg(green)
             .add_modifier(Modifier::BOLD);
 
-        t.groups_item_focused = Style::default().bg(dark_bg).fg(green);
+        // t.groups_item_focused = Style::default().bg(dark_bg).fg(green);
+        // t.groups_item_unfocused = Style::default().bg(dark_bg).fg(green);
         t.groups_item_unfocused = Style::default().bg(dark_bg).fg(green);
+        t.groups_item_focused = t.groups_item_unfocused;
 
         t.groups_selected_unfocused = Style::default().bg(dark_bg).fg(green);
 
@@ -178,11 +183,14 @@ impl Theme {
         // Inactive filter fields: black bg, green text
         t.filter_field_inactive = Style::default().bg(dark_bg).fg(green);
 
-        // Active filter field (not editing): dark green band with bright text
-        t.filter_field_active_idle = Style::default().bg(band_bg).fg(Color::Rgb(0, 255, 0));
+        // Active idle filter field: dark green band
+        t.filter_field_active_idle = Style::default().bg(band_bg).fg(green);
 
-        // Active filter field while editing: bright green band with black text
-        t.filter_field_active_editing = Style::default().bg(green).fg(Color::Black);
+        // Active editing filter field: brighter band, maybe bold
+        t.filter_field_active_editing = Style::default()
+            .bg(bright_bg)
+            .fg(green)
+            .add_modifier(Modifier::BOLD);
 
         t.popup_block = Style::default().bg(dark_bg).fg(green);
         t.popup_border = Style::default().fg(green);

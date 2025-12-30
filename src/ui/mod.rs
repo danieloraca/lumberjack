@@ -52,7 +52,9 @@ impl Widget for &App {
         );
         Line::from(self.app_title.as_str())
             .bold()
+            .style(theme.header)
             .render(header[0], buf);
+
         Line::from(header_right_text)
             .right_aligned()
             .style(header_style)
