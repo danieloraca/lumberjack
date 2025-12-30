@@ -140,62 +140,78 @@ impl Theme {
     }
 
     pub fn green() -> Self {
+        // Start from dark to fill all fields, then override.
         let mut t = Theme::default_dark();
 
+        // Neon-ish phosphor green: slightly yellowish, bright
         let green = Color::Rgb(160, 255, 0);
         let dark_bg = Color::Black;
-        let band_bg = Color::Rgb(0, 40, 0);
-        let bright_bg = Color::Rgb(0, 90, 0);
+        let band_bg = Color::Rgb(0, 40, 0); // very dark green band
+        let bright_bg = Color::Rgb(0, 90, 0); // brighter band for strong highlight
 
+        // Header / footer: pure phosphor look
         t.header = Style::default()
             .bg(dark_bg)
             .fg(green)
             .add_modifier(Modifier::BOLD);
         t.footer = Style::default().bg(dark_bg).fg(green);
 
+        // --- Groups pane ---
+
+        // Block background
         t.groups_block_focused = Style::default().bg(dark_bg).fg(green);
-        // Unselected items: plain phosphor style
+        t.groups_block_unfocused = Style::default().bg(dark_bg).fg(green);
+
+        // Unselected items
         t.groups_item_unfocused = Style::default().bg(dark_bg).fg(green);
-        // Selected item (when Groups pane is focused): brighter band with bold
+        t.groups_item_focused = t.groups_item_unfocused;
+
+        // Selected item (pane focused): bright band, bold
         t.groups_selected_focused = Style::default()
             .bg(bright_bg)
             .fg(green)
             .add_modifier(Modifier::BOLD);
 
-        // t.groups_item_focused = Style::default().bg(dark_bg).fg(green);
-        // t.groups_item_unfocused = Style::default().bg(dark_bg).fg(green);
-        t.groups_item_unfocused = Style::default().bg(dark_bg).fg(green);
-        t.groups_item_focused = t.groups_item_unfocused;
+        // Selected item (pane unfocused): darker band, still visible
+        t.groups_selected_unfocused = Style::default().bg(band_bg).fg(green);
 
-        t.groups_selected_unfocused = Style::default().bg(dark_bg).fg(green);
+        // --- Filter pane ---
 
         t.filter_block_focused = Style::default().bg(dark_bg).fg(green);
         t.filter_block_unfocused = Style::default().bg(dark_bg).fg(green);
 
-        t.results_block_focused = Style::default().bg(dark_bg).fg(green);
-        t.results_block_unfocused = Style::default().bg(dark_bg).fg(green);
-
-        t.pane_border_focused = Style::default().fg(green);
-        t.pane_border_unfocused = Style::default().fg(green);
-
-        t.default_gray = Style::default().fg(green);
-
-        // Inactive filter fields: black bg, green text
+        // Inactive fields: black bg, green text
         t.filter_field_inactive = Style::default().bg(dark_bg).fg(green);
 
-        // Active idle filter field: dark green band
+        // Active (not editing): dark green band
         t.filter_field_active_idle = Style::default().bg(band_bg).fg(green);
 
-        // Active editing filter field: brighter band, maybe bold
+        // Active (editing): brighter band, bold
         t.filter_field_active_editing = Style::default()
             .bg(bright_bg)
             .fg(green)
             .add_modifier(Modifier::BOLD);
 
+        // --- Results pane ---
+
+        t.results_block_focused = Style::default().bg(dark_bg).fg(green);
+        t.results_block_unfocused = Style::default().bg(dark_bg).fg(green);
+
+        // --- Borders, text, cursor, popups ---
+
+        t.pane_border_focused = Style::default().fg(green);
+        t.pane_border_unfocused = Style::default().fg(green);
+
+        // "Gray" in green mode is just green
+        t.default_gray = Style::default().fg(green);
+
+        // Popups: same phosphor look
         t.popup_block = Style::default().bg(dark_bg).fg(green);
         t.popup_border = Style::default().fg(green);
 
         t.presets_hint = Style::default().fg(green);
+
+        // Cursor: thin green bar on black
         t.cursor = Style::default().fg(green).bg(dark_bg);
 
         t
