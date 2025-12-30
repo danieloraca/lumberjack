@@ -65,7 +65,7 @@ impl Widget for &App {
         } else if self.group_search_active {
             format!("Search groups: {}", self.group_search_input)
         } else {
-            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  t Tail  y Copy  Esc Cancel  q Quit"
+            "Tab Switch pane  ↑↓ Move  Enter Edit/Run  t Tail  y Copy  Esc Cancel  T Themes  q Quit"
                 .to_string()
         };
 
