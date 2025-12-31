@@ -1,7 +1,7 @@
+use std::env;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
-use std::{env, io};
 
 mod app;
 mod aws;
@@ -13,7 +13,7 @@ use aws::fetch_log_groups;
 
 const APP_TITLE: &str = "Lumberjack";
 
-fn main() -> io::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = ratatui::init();
 
     let region = env::args()
@@ -24,7 +24,7 @@ fn main() -> io::Result<()> {
         .find_map(|arg| arg.strip_prefix("--profile=").map(String::from))
         .unwrap_or_else(|| "No Profile Provided".to_string());
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new()?;
 
     let groups = match rt.block_on(fetch_log_groups(&region, &profile)) {
         Ok(g) if !g.is_empty() => g,
@@ -81,5 +81,5 @@ fn main() -> io::Result<()> {
     let app_result = app.run(&mut terminal);
 
     ratatui::restore();
-    app_result
+    app_result.map_err(|e| e.into())
 }
