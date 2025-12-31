@@ -1,5 +1,4 @@
 use ratatui::prelude::{Buffer, Rect};
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
@@ -11,6 +10,7 @@ impl App {
         let guard_w = 1u16;
         let scrollbar_w = 1u16;
         let reserved = guard_w + scrollbar_w;
+        let theme = self.theme.clone();
 
         let text_area = Rect {
             x: results_inner.x,
@@ -80,10 +80,7 @@ impl App {
                 // Everything after the timestamp (including the space if present)
                 let rest: String = chars.collect();
 
-                let ts_style = Style::default()
-                    .fg(ratatui::style::Color::Rgb(100, 180, 180))
-                    .bg(ratatui::style::Color::Rgb(5, 5, 5))
-                    .add_modifier(ratatui::style::Modifier::BOLD);
+                let ts_style = theme.results_timestamp;
 
                 let spans = if rest.is_empty() {
                     vec![Span::styled(ts, ts_style)]
