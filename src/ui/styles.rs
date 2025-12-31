@@ -30,6 +30,7 @@ pub struct Theme {
     pub popup_border: Style,
     pub presets_hint: Style,
     pub cursor: Style,
+    pub results_timestamp: Style,
 }
 
 impl Theme {
@@ -79,6 +80,10 @@ impl Theme {
 
             presets_hint: Style::default().fg(Color::Rgb(50, 50, 50)),
             cursor: Style::default().fg(Color::White).bg(Color::Rgb(20, 20, 20)),
+            results_timestamp: Style::default()
+                .fg(Color::Rgb(100, 180, 180))
+                .bg(Color::Rgb(5, 5, 5))
+                .add_modifier(Modifier::BOLD),
         }
     }
 
@@ -86,19 +91,19 @@ impl Theme {
         // Start from dark to fill all fields, then override what we care about.
         let mut t = Theme::default_dark();
 
-        let bg = Color::Rgb(240, 240, 240);
-        let bg_alt = Color::Rgb(230, 230, 230);
+        let bg = Color::Rgb(240, 240, 240); // main background
+        let bg_alt = Color::Rgb(230, 230, 230); // subtle contrast band
         let text = Color::Rgb(30, 30, 30);
 
         // Header / footer
         t.header = Style::default().bg(bg).fg(text);
         t.footer = Style::default().bg(bg).fg(text);
 
-        // Groups block background
+        // --- Groups ---
+
         t.groups_block_focused = Style::default().bg(bg_alt).fg(text);
         t.groups_block_unfocused = Style::default().bg(bg_alt).fg(text);
 
-        // Group items
         t.groups_item_unfocused = Style::default().bg(bg_alt).fg(text);
         t.groups_item_focused = t.groups_item_unfocused;
 
@@ -108,11 +113,17 @@ impl Theme {
             .add_modifier(Modifier::BOLD);
         t.groups_selected_unfocused = Style::default().bg(Color::Rgb(220, 220, 220)).fg(text);
 
-        // Filter block
+        // --- Filter ---
+
         t.filter_block_focused = Style::default().bg(bg).fg(text);
         t.filter_block_unfocused = Style::default().bg(bg).fg(text);
 
-        // Results block
+        t.filter_field_inactive = Style::default().bg(bg).fg(Color::Rgb(120, 120, 120));
+        t.filter_field_active_idle = Style::default().bg(Color::Rgb(220, 220, 220)).fg(text);
+        t.filter_field_active_editing = Style::default().bg(Color::Rgb(200, 200, 200)).fg(text);
+
+        // --- Results ---
+
         t.results_block_focused = Style::default().bg(bg).fg(text);
         t.results_block_unfocused = Style::default().bg(bg).fg(text);
 
@@ -136,6 +147,10 @@ impl Theme {
         t.presets_hint = Style::default().fg(Color::Rgb(100, 100, 100));
         t.cursor = Style::default().fg(text).bg(Color::Rgb(220, 220, 220));
 
+        t.results_timestamp = Style::default()
+            .fg(Color::Rgb(0, 100, 180))
+            .bg(bg)
+            .add_modifier(Modifier::BOLD);
         t
     }
 
@@ -214,6 +229,10 @@ impl Theme {
         // Cursor: thin green bar on black
         t.cursor = Style::default().fg(green).bg(dark_bg);
 
+        t.results_timestamp = Style::default()
+            .fg(Color::Rgb(0, 180, 180))
+            .bg(dark_bg)
+            .add_modifier(Modifier::BOLD);
         t
     }
 }
