@@ -1,18 +1,20 @@
 mod clipboard;
 mod filters;
 mod keymap;
+pub mod state;
 
-use std::io;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::{Duration, Instant};
-
-use crate::ui::styles::Theme;
+use crate::app::state::AppState;
 use chrono::Utc;
 use ratatui::crossterm::event;
 use ratatui::prelude::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::{DefaultTerminal, Frame};
+use std::io;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, Instant};
 
 use crate::aws::fetch_log_events;
 use serde::{Deserialize, Serialize};
@@ -43,89 +45,48 @@ pub struct SavedFilter {
 }
 
 pub struct App {
-    pub app_title: String,
-    pub theme: Theme,
-    pub theme_name: String,
+    pub state: AppState,
     pub exit: bool,
-    pub lines: Vec<String>,
-    pub filter_cursor_pos: usize,
-
-    pub all_groups: Vec<String>,
-    pub groups: Vec<String>,
-    pub selected_group: usize,
-    pub groups_scroll: usize,
-
-    pub profile: String,
-    pub region: String,
-    pub focus: Focus,
-
-    pub filter_start: String,
-    pub filter_end: String,
-    pub filter_query: String,
-    pub filter_field: FilterField,
-    pub editing: bool,
-    pub cursor_on: bool,
-    pub last_blink: Instant,
-
-    pub group_search_active: bool,
-    pub group_search_input: String,
-
     pub search_tx: Sender<String>,
     pub search_rx: Receiver<String>,
-    pub searching: bool,
-    pub dots: usize,
-    pub last_dots: Instant,
-    pub results_scroll: usize,
-
-    pub tail_mode: bool,
-    pub tail_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-
-    pub status_message: Option<String>,
-    pub status_set_at: Option<Instant>,
-
-    pub saved_filters: Vec<SavedFilter>,
-
-    pub save_filter_popup_open: bool,
-    pub save_filter_name: String,
-
-    pub load_filter_popup_open: bool,
-    pub load_filter_selected: usize,
+    pub tail_stop: Arc<AtomicBool>,
 }
 
 impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
-            if self.focus == Focus::Filter && self.editing {
-                if self.last_blink.elapsed() >= Duration::from_millis(500) {
-                    self.cursor_on = !self.cursor_on;
-                    self.last_blink = Instant::now();
+            if self.state.focus == Focus::Filter && self.state.editing {
+                if self.state.last_blink.elapsed() >= Duration::from_millis(500) {
+                    self.state.cursor_on = !self.state.cursor_on;
+                    self.state.last_blink = Instant::now();
                 }
             } else {
-                self.cursor_on = true;
-                self.last_blink = Instant::now();
+                self.state.cursor_on = true;
+                self.state.last_blink = Instant::now();
             }
 
             while let Ok(msg) = self.search_rx.try_recv() {
                 let total = self.results_total_lines();
-                self.results_scroll = self.results_scroll.min(total.saturating_sub(1));
+                self.state.results_scroll = self.state.results_scroll.min(total.saturating_sub(1));
 
                 if msg == "__SEARCH_DONE__" {
-                    self.searching = false;
+                    self.state.searching = false;
                     // when done, move focus to results so arrows can scroll later etc.
-                    self.focus = Focus::Results;
+                    self.state.focus = Focus::Results;
                     continue;
                 }
 
-                self.lines.push(msg);
+                self.state.lines.push(msg);
                 // optional cap
-                if self.lines.len() > 2000 {
-                    self.lines.drain(0..500);
+                if self.state.lines.len() > 2000 {
+                    self.state.lines.drain(0..500);
                 }
             }
 
-            if self.searching && self.last_dots.elapsed() >= Duration::from_millis(250) {
-                self.dots = (self.dots + 1) % 7;
-                self.last_dots = Instant::now();
+            if self.state.searching && self.state.last_dots.elapsed() >= Duration::from_millis(250)
+            {
+                self.state.dots = (self.state.dots + 1) % 7;
+                self.state.last_dots = Instant::now();
             }
 
             // Clear transient status messages after 2 seconds
@@ -221,17 +182,17 @@ impl App {
     }
 
     fn results_up(&mut self) {
-        self.results_scroll = self.results_scroll.saturating_sub(1);
+        self.state.results_scroll = self.state.results_scroll.saturating_sub(1);
     }
 
     fn results_total_lines(&self) -> usize {
-        self.lines.iter().map(|s| s.lines().count()).sum()
+        self.state.lines.iter().map(|s| s.lines().count()).sum()
     }
 
     fn results_down(&mut self) {
         let total = self.results_total_lines();
-        if self.results_scroll + 1 < total {
-            self.results_scroll += 1;
+        if self.state.results_scroll + 1 < total {
+            self.state.results_scroll += 1;
         }
     }
 
@@ -240,47 +201,48 @@ impl App {
     }
 
     fn clamp_groups_scroll(&mut self, visible_rows: usize) {
-        if self.groups.is_empty() {
-            self.groups_scroll = 0;
-            self.selected_group = 0;
+        if self.state.groups.is_empty() {
+            self.state.groups_scroll = 0;
+            self.state.selected_group = 0;
             return;
         }
 
-        if self.selected_group < self.groups_scroll {
-            self.groups_scroll = self.selected_group;
-        } else if self.selected_group >= self.groups_scroll + visible_rows {
-            self.groups_scroll = self.selected_group + 1 - visible_rows;
+        if self.state.selected_group < self.state.groups_scroll {
+            self.state.groups_scroll = self.state.selected_group;
+        } else if self.state.selected_group >= self.state.groups_scroll + visible_rows {
+            self.state.groups_scroll = self.state.selected_group + 1 - visible_rows;
         }
 
-        let max_scroll = self.groups.len().saturating_sub(visible_rows);
-        self.groups_scroll = self.groups_scroll.min(max_scroll);
+        let max_scroll = self.state.groups.len().saturating_sub(visible_rows);
+        self.state.groups_scroll = self.state.groups_scroll.min(max_scroll);
     }
 
     fn active_field_mut(&mut self) -> &mut String {
-        match self.filter_field {
-            FilterField::Start => &mut self.filter_start,
-            FilterField::End => &mut self.filter_end,
-            FilterField::Query => &mut self.filter_query,
-            FilterField::Search => &mut self.filter_query, // unused; won't type into Search
+        match self.state.filter_field {
+            FilterField::Start => &mut self.state.filter_start,
+            FilterField::End => &mut self.state.filter_end,
+            FilterField::Query => &mut self.state.filter_query,
+            FilterField::Search => &mut self.state.filter_query, // unused; won't type into Search
         }
     }
 
     fn groups_up(&mut self) {
-        if !self.groups.is_empty() {
-            self.selected_group = self.selected_group.saturating_sub(1);
+        if !self.state.groups.is_empty() {
+            self.state.selected_group = self.state.selected_group.saturating_sub(1);
             self.clamp_groups_scroll(self.visible_group_rows());
         }
     }
     fn groups_down(&mut self) {
-        if !self.groups.is_empty() {
-            self.selected_group = (self.selected_group + 1).min(self.groups.len() - 1);
+        if !self.state.groups.is_empty() {
+            self.state.selected_group =
+                (self.state.selected_group + 1).min(self.state.groups.len() - 1);
             self.clamp_groups_scroll(self.visible_group_rows());
         }
     }
 
     fn filter_prev(&mut self) {
         // Up arrow: move backward and wrap
-        self.filter_field = match self.filter_field {
+        self.state.filter_field = match self.state.filter_field {
             FilterField::Start => FilterField::Search,
             FilterField::End => FilterField::Start,
             FilterField::Query => FilterField::End,
@@ -290,7 +252,7 @@ impl App {
 
     fn filter_next(&mut self) {
         // Down arrow: move forward and wrap
-        self.filter_field = match self.filter_field {
+        self.state.filter_field = match self.state.filter_field {
             FilterField::Start => FilterField::End,
             FilterField::End => FilterField::Query,
             FilterField::Query => FilterField::Search,
@@ -299,32 +261,32 @@ impl App {
     }
 
     fn start_search(&mut self) {
-        self.searching = true;
-        self.dots = 0;
-        self.last_dots = Instant::now();
-        self.focus = Focus::Results; // lose focus from form
-        self.editing = false;
-        self.lines.clear(); // optional
-        self.results_scroll = 0;
+        self.state.searching = true;
+
+        self.state.last_dots = Instant::now();
+        self.state.focus = Focus::Results; // lose focus from form
+        self.state.editing = false;
+        self.state.lines.clear(); // optional
+        self.state.results_scroll = 0;
         self.tail_stop.store(false, Ordering::Relaxed);
 
-        let group = match self.groups.get(self.selected_group) {
+        let group = match self.state.groups.get(self.state.selected_group) {
             Some(g) => g.clone(),
             None => return,
         };
 
-        let region = self.region.clone();
-        let profile = self.profile.clone();
-        let start = self.filter_start.clone();
-        let end = self.filter_end.clone();
-        let pattern = self.filter_query.clone();
+        let region = self.state.region.clone();
+        let profile = self.state.profile.clone();
+        let start = self.state.filter_start.clone();
+        let end = self.state.filter_end.clone();
+        let pattern = self.state.filter_query.clone();
 
         let tx = self.search_tx.clone();
 
         // show immediate feedback
         let _ = tx.send(format!("Searching {} ...", group));
 
-        let tail_mode = self.tail_mode;
+        let tail_mode = self.state.tail_mode;
         let tail_stop = self.tail_stop.clone();
 
         std::thread::spawn(move || {
@@ -413,10 +375,10 @@ impl App {
     }
 
     pub fn active_field_len(&self) -> usize {
-        match self.filter_field {
-            FilterField::Start => self.filter_start.len(),
-            FilterField::End => self.filter_end.len(),
-            FilterField::Query => self.filter_query.len(),
+        match self.state.filter_field {
+            FilterField::Start => self.state.filter_start.len(),
+            FilterField::End => self.state.filter_end.len(),
+            FilterField::Query => self.state.filter_query.len(),
             FilterField::Search => 0,
         }
     }
@@ -441,16 +403,17 @@ impl App {
     }
 
     fn apply_group_search_filter(&mut self) {
-        if !self.group_search_active || self.group_search_input.is_empty() {
+        if !self.state.group_search_active || self.state.group_search_input.is_empty() {
             // No active search → restore original list
-            self.groups = self.all_groups.clone();
-            self.selected_group = 0;
-            self.groups_scroll = 0;
+            self.state.groups = self.state.all_groups.clone();
+            self.state.selected_group = 0;
+            self.state.groups_scroll = 0;
             return;
         }
 
-        let pattern = self.group_search_input.clone();
+        let pattern = self.state.group_search_input.clone();
         let mut filtered: Vec<String> = self
+            .state
             .all_groups
             .iter()
             .filter(|g| Self::fuzzy_match(g, &pattern))
@@ -461,26 +424,26 @@ impl App {
             filtered.push("(no matches)".to_string());
         }
 
-        self.groups = filtered;
-        self.selected_group = 0;
-        self.groups_scroll = 0;
+        self.state.groups = filtered;
+        self.state.selected_group = 0;
+        self.state.groups_scroll = 0;
     }
 
     fn apply_time_preset(&mut self, start: &str) {
-        self.filter_start = start.to_string();
-        self.filter_end.clear(); // empty = "now"
+        self.state.filter_start = start.to_string();
+        self.state.filter_end.clear(); // empty = "now"
 
-        self.filter_field = FilterField::Query;
+        self.state.filter_field = FilterField::Query;
 
         // Ensure we're not in editing mode
-        self.editing = false;
+        self.state.editing = false;
     }
 
     fn maybe_clear_status(&mut self) {
-        if let Some(set_at) = self.status_set_at {
+        if let Some(set_at) = self.state.status_set_at {
             if set_at.elapsed() >= Duration::from_secs(2) {
-                self.status_message = None;
-                self.status_set_at = None;
+                self.state.status_message = None;
+                self.state.status_set_at = None;
             }
         }
     }
@@ -489,16 +452,16 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Theme;
 
     fn app_with_groups(groups: Vec<&str>) -> App {
         let groups_owned: Vec<String> = groups.iter().map(|s| s.to_string()).collect();
         let (tx, rx) = std::sync::mpsc::channel();
 
-        App {
+        let state = AppState {
             app_title: "Test".to_string(),
             theme: Theme::default_dark(),
             theme_name: "dark".to_string(),
-            exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,
 
@@ -522,15 +485,12 @@ mod tests {
             group_search_active: false,
             group_search_input: String::new(),
 
-            search_tx: tx,
-            search_rx: rx,
             searching: false,
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
 
             tail_mode: false,
-            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
 
             status_message: None,
             status_set_at: None,
@@ -540,6 +500,14 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+        };
+
+        App {
+            state,
+            exit: false,
+            search_tx: tx,
+            search_rx: rx,
+            tail_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -571,42 +539,42 @@ mod tests {
         let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
 
         // not active, even if input is non-empty → should ignore and restore full list
-        app.group_search_active = false;
-        app.group_search_input = "api".to_string();
+        app.state.group_search_active = false;
+        app.state.group_search_input = "api".to_string();
         app.apply_group_search_filter();
 
-        assert_eq!(app.groups.len(), 2);
-        assert_eq!(app.groups[0], "/aws/lambda/api");
-        assert_eq!(app.groups[1], "/aws/lambda/worker");
+        assert_eq!(app.state.groups.len(), 2);
+        assert_eq!(app.state.groups[0], "/aws/lambda/api");
+        assert_eq!(app.state.groups[1], "/aws/lambda/worker");
     }
 
     #[test]
     fn apply_group_search_filter_filters_when_active() {
         let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
 
-        app.group_search_active = true;
-        app.group_search_input = "wrk".to_string(); // matches "worker"
+        app.state.group_search_active = true;
+        app.state.group_search_input = "wrk".to_string(); // matches "worker"
 
         app.apply_group_search_filter();
 
-        assert_eq!(app.groups.len(), 1);
-        assert_eq!(app.groups[0], "/aws/lambda/worker");
-        assert_eq!(app.selected_group, 0);
-        assert_eq!(app.groups_scroll, 0);
+        assert_eq!(app.state.groups.len(), 1);
+        assert_eq!(app.state.groups[0], "/aws/lambda/worker");
+        assert_eq!(app.state.selected_group, 0);
+        assert_eq!(app.state.groups_scroll, 0);
     }
 
     #[test]
     fn apply_group_search_filter_no_matches_shows_placeholder() {
         let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
 
-        app.group_search_active = true;
-        app.group_search_input = "xyz".to_string();
+        app.state.group_search_active = true;
+        app.state.group_search_input = "xyz".to_string();
 
         app.apply_group_search_filter();
 
-        assert_eq!(app.groups.len(), 1);
-        assert_eq!(app.groups[0], "(no matches)");
-        assert_eq!(app.selected_group, 0);
+        assert_eq!(app.state.groups.len(), 1);
+        assert_eq!(app.state.groups[0], "(no matches)");
+        assert_eq!(app.state.selected_group, 0);
     }
 
     #[test]
@@ -614,54 +582,54 @@ mod tests {
         let mut app = app_with_groups(vec!["/aws/lambda/api", "/aws/lambda/worker"]);
 
         // First, narrow to one
-        app.group_search_active = true;
-        app.group_search_input = "api".to_string();
+        app.state.group_search_active = true;
+        app.state.group_search_input = "api".to_string();
         app.apply_group_search_filter();
-        assert_eq!(app.groups.len(), 1);
+        assert_eq!(app.state.groups.len(), 1);
 
         // Then, clear the input and reapply
-        app.group_search_input.clear();
+        app.state.group_search_input.clear();
         app.apply_group_search_filter();
 
-        assert_eq!(app.groups.len(), 2);
-        assert_eq!(app.groups[0], "/aws/lambda/api");
-        assert_eq!(app.groups[1], "/aws/lambda/worker");
+        assert_eq!(app.state.groups.len(), 2);
+        assert_eq!(app.state.groups[0], "/aws/lambda/api");
+        assert_eq!(app.state.groups[1], "/aws/lambda/worker");
     }
 
     #[test]
     fn apply_time_preset_sets_start_and_clears_end() {
         let mut app = app_with_groups(vec!["/aws/lambda/api"]);
 
-        app.filter_start = "2025-12-11T10:00:00Z".to_string();
-        app.filter_end = "2025-12-11T11:00:00Z".to_string();
-        app.filter_field = FilterField::Start;
-        app.editing = true;
+        app.state.filter_start = "2025-12-11T10:00:00Z".to_string();
+        app.state.filter_end = "2025-12-11T11:00:00Z".to_string();
+        app.state.filter_field = FilterField::Start;
+        app.state.editing = true;
 
         app.apply_time_preset("-15m");
 
-        assert_eq!(app.filter_start, "-15m");
-        assert_eq!(app.filter_end, "");
-        assert_eq!(app.filter_field, FilterField::Query);
-        assert!(!app.editing);
+        assert_eq!(app.state.filter_start, "-15m");
+        assert_eq!(app.state.filter_end, "");
+        assert_eq!(app.state.filter_field, FilterField::Query);
+        assert!(!app.state.editing);
     }
 
     #[test]
     fn maybe_clear_status_clears_after_timeout() {
         let mut app = app_with_groups(vec!["/aws/lambda/api"]);
-        app.status_message = Some("test".to_string());
+        app.state.status_message = Some("test".to_string());
 
         // Simulate a status set in the past by manually setting status_set_at
         // to an Instant that is guaranteed to have "elapsed" >= 2s.
-        app.status_set_at = Some(Instant::now() - Duration::from_secs(3));
+        app.state.status_set_at = Some(Instant::now() - Duration::from_secs(3));
 
         app.maybe_clear_status();
 
         assert!(
-            app.status_message.is_none(),
+            app.state.status_message.is_none(),
             "expected status_message to be cleared after timeout"
         );
         assert!(
-            app.status_set_at.is_none(),
+            app.state.status_set_at.is_none(),
             "expected status_set_at to be cleared after timeout"
         );
     }

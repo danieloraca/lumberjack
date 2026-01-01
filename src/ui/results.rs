@@ -1,8 +1,7 @@
+use crate::app::App;
 use ratatui::prelude::{Buffer, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
-
-use crate::app::App;
 
 impl App {
     pub fn render_results(&self, results_inner: Rect, buf: &mut Buffer) {
@@ -10,7 +9,7 @@ impl App {
         let guard_w = 1u16;
         let scrollbar_w = 1u16;
         let reserved = guard_w + scrollbar_w;
-        let theme = self.theme.clone();
+        let theme = self.state.theme.clone();
 
         let text_area = Rect {
             x: results_inner.x,
@@ -25,7 +24,7 @@ impl App {
 
         // Flatten entries into raw lines (no manual wrapping).
         let mut raw_lines: Vec<String> = Vec::new();
-        for entry in &self.lines {
+        for entry in &self.state.lines {
             for raw_line in entry.lines() {
                 raw_lines.push(raw_line.to_string());
             }
@@ -40,13 +39,13 @@ impl App {
                 results_inner,
                 0,
                 0,
-                self.focus == crate::app::Focus::Results,
+                self.state.focus == crate::app::Focus::Results,
             );
             return;
         }
 
         // Simple per-line vertical window
-        let start = self.results_scroll.min(total.saturating_sub(1));
+        let start = self.state.results_scroll.min(total.saturating_sub(1));
         let end = (start + visible_rows).min(total);
 
         for (i, line) in raw_lines[start..end].iter().enumerate() {
@@ -117,7 +116,7 @@ impl App {
             results_inner,
             start, // first visible line index
             total, // total number of lines
-            self.focus == crate::app::Focus::Results,
+            self.state.focus == crate::app::Focus::Results,
         );
     }
 }
@@ -130,16 +129,16 @@ mod tests {
     use std::sync::{Arc, mpsc};
     use std::time::Instant;
 
+    use crate::app::state::AppState;
     use crate::app::{App, FilterField, Focus};
     use crate::ui::styles::Theme;
 
     fn make_results_app(lines: Vec<&str>) -> App {
         let (tx, rx) = mpsc::channel();
-        App {
+        let state = AppState {
             app_title: "Test".to_string(),
             theme: Theme::default_dark(),
             theme_name: "dark".to_string(),
-            exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
             filter_cursor_pos: 0,
 
@@ -163,15 +162,11 @@ mod tests {
             group_search_active: false,
             group_search_input: String::new(),
 
-            search_tx: tx,
-            search_rx: rx,
             searching: false,
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
-
             tail_mode: false,
-            tail_stop: Arc::new(AtomicBool::new(false)),
 
             status_message: None,
             status_set_at: None,
@@ -181,6 +176,14 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+        };
+
+        App {
+            state,
+            exit: false,
+            search_tx: tx,
+            search_rx: rx,
+            tail_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
