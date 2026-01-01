@@ -28,8 +28,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let groups = match rt.block_on(fetch_log_groups(&region, &profile)) {
         Ok(g) if !g.is_empty() => g,
-        Ok(_) => vec!["(no log groups found)".to_string()],
-        Err(e) => vec![format!("(error fetching log groups: {e})")],
+        Ok(_) => vec![format!(
+            "(no log groups found in region {} for profile {})",
+            region, profile
+        )],
+        Err(e) => {
+            eprintln!("Error fetching log groups: {e}");
+            vec![format!("(error fetching log groups: {e})")]
+        }
     };
 
     let (search_tx, search_rx) = std::sync::mpsc::channel::<String>();
@@ -85,5 +91,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_result = app.run(&mut terminal);
 
     ratatui::restore();
-    app_result.map_err(|e| e.into())
+    app_result.map_err(Into::into)
 }

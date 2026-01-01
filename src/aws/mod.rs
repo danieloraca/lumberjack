@@ -2,6 +2,31 @@ use aws_config::Region;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_cloudwatchlogs as cwl;
 use chrono::{DateTime, Utc};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AwsLogError {
+    #[error("Failed to create CloudWatch Logs client: {0}")]
+    ClientInit(String),
+
+    #[error("Failed to fetch log groups for region '{region}' and profile '{profile}': {source}")]
+    FetchLogGroups {
+        region: String,
+        profile: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("Failed to fetch log events for group '{group}': {source}")]
+    FetchLogEvents {
+        group: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("Invalid time filter '{value}': {reason}")]
+    TimeParse { value: String, reason: String },
+}
 
 #[derive(Debug)]
 struct SimpleLogEvent<'a> {
@@ -9,18 +34,10 @@ struct SimpleLogEvent<'a> {
     message: &'a str,
 }
 
-pub async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>, cwl::Error> {
-    let region_provider = RegionProviderChain::first_try(Some(Region::new(region.to_string())))
-        .or_default_provider()
-        .or_else(Region::new("eu-west-1"));
-
-    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(region_provider)
-        .profile_name(profile)
-        .load()
-        .await;
-
-    let client = cwl::Client::new(&cfg);
+pub async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>, AwsLogError> {
+    let client = build_cloudwatch_client(region, profile)
+        .await
+        .map_err(|e| AwsLogError::ClientInit(e.to_string()))?;
 
     let mut out = Vec::new();
     let mut next_token: Option<String> = None;
@@ -31,7 +48,11 @@ pub async fn fetch_log_groups(region: &str, profile: &str) -> Result<Vec<String>
             req = req.next_token(token);
         }
 
-        let resp = req.send().await?;
+        let resp = req.send().await.map_err(|e| AwsLogError::FetchLogGroups {
+            region: region.to_string(),
+            profile: profile.to_string(),
+            source: Box::new(e),
+        })?;
 
         for g in resp.log_groups() {
             if let Some(name) = g.log_group_name() {
@@ -56,27 +77,29 @@ pub async fn fetch_log_events(
     start: &str,
     end: &str,
     pattern: &str,
-) -> Result<(Vec<String>, Option<i64>), String> {
-    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(Region::new(region.to_string()))
-        .profile_name(profile)
-        .load()
-        .await;
-
-    let client = cwl::Client::new(&cfg);
+) -> Result<(Vec<String>, Option<i64>), AwsLogError> {
+    let client = build_cloudwatch_client(region, profile)
+        .await
+        .map_err(|e| AwsLogError::ClientInit(e.to_string()))?;
 
     let now_ms = Utc::now().timestamp_millis();
     let start_ms = if start.trim().is_empty() {
         // default: last 15m
         now_ms - 15 * 60 * 1_000
     } else {
-        parse_relative_or_absolute_ms(start, now_ms)?
+        parse_relative_or_absolute_ms(start, now_ms).map_err(|reason| AwsLogError::TimeParse {
+            value: start.to_string(),
+            reason,
+        })?
     };
 
     let end_ms = if end.trim().is_empty() {
         now_ms
     } else {
-        parse_relative_or_absolute_ms(end, now_ms)?
+        parse_relative_or_absolute_ms(end, now_ms).map_err(|reason| AwsLogError::TimeParse {
+            value: end.to_string(),
+            reason,
+        })?
     };
 
     let mut out = Vec::new();
@@ -100,7 +123,10 @@ pub async fn fetch_log_events(
             req = req.next_token(tok);
         }
 
-        let resp = req.send().await.map_err(|e| e.to_string())?;
+        let resp = req.send().await.map_err(|e| AwsLogError::FetchLogEvents {
+            group: log_group.to_string(),
+            source: Box::new(e),
+        })?;
 
         for ev in resp.events() {
             let ts = ev.timestamp().unwrap_or(0);
@@ -278,6 +304,20 @@ fn normalize_filter_pattern(raw: &str) -> String {
     } else {
         format!("{{ {} }}", conditions.join(" && "))
     }
+}
+
+async fn build_cloudwatch_client(region: &str, profile: &str) -> Result<cwl::Client, AwsLogError> {
+    let region_provider = RegionProviderChain::first_try(Some(Region::new(region.to_string())))
+        .or_default_provider()
+        .or_else(Region::new("eu-west-1"));
+
+    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .profile_name(profile)
+        .load()
+        .await;
+
+    Ok(cwl::Client::new(&cfg))
 }
 
 #[cfg(test)]
@@ -558,6 +598,27 @@ mod tests {
     }
 
     #[test]
+    fn parse_relative_time_rejects_missing_number() {
+        let now_ms = Utc::now().timestamp_millis();
+        let err = parse_relative_or_absolute_ms("-", now_ms).expect_err("'-' should be invalid");
+        assert!(
+            err.contains("missing number"),
+            "expected 'missing number' in error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_relative_time_rejects_invalid_unit() {
+        let now_ms = Utc::now().timestamp_millis();
+        let err =
+            parse_relative_or_absolute_ms("-5x", now_ms).expect_err("'-5x' should be invalid");
+        assert!(
+            err.contains("Invalid relative time unit"),
+            "expected unit error, got: {err}"
+        );
+    }
+
+    #[test]
     fn parse_relative_time_falls_back_to_absolute() {
         let input = "2025-12-11T10:00:00Z";
         let now_ms = 0; // doesn't matter; absolute path ignores it
@@ -568,5 +629,44 @@ mod tests {
         assert_eq!(dt.month(), 12);
         assert_eq!(dt.day(), 11);
         assert_eq!(dt.hour(), 10);
+    }
+
+    #[test]
+    fn aws_log_error_timeparse_includes_value_and_reason() {
+        let err = AwsLogError::TimeParse {
+            value: "-5x".to_string(),
+            reason: "Invalid relative time unit in '-5x'. Use one of: s, m, h, d".to_string(),
+        };
+
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("-5x") && msg.contains("Invalid relative time unit"),
+            "expected value and reason in AwsLogError::TimeParse display, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn normalize_filter_pattern_leaves_explicit_expressions_unchanged() {
+        let input = r#"{ $.routing_id = 123 && $.task = "foo" }"#;
+        let out = normalize_filter_pattern(input);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn normalize_filter_pattern_builds_shorthand_expression() {
+        let input = r#"routing_id=123 task="batch-attendances""#;
+        let out = normalize_filter_pattern(input);
+        assert_eq!(
+            out,
+            r#"{ $.routing_id = 123 && $.task = "batch-attendances" }"#
+        );
+    }
+
+    #[test]
+    fn normalize_filter_pattern_bails_out_on_mixed_tokens() {
+        let input = "routing_id=123 weird-token";
+        let out = normalize_filter_pattern(input);
+        // Should fall back to the original string when it can't interpret tokens
+        assert_eq!(out, input);
     }
 }
