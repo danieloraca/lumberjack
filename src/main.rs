@@ -7,7 +7,7 @@ mod app;
 mod aws;
 mod ui;
 
-use crate::ui::styles::Theme;
+use crate::{app::state::AppState, ui::styles::Theme};
 use app::{App, FilterField, Focus};
 use aws::fetch_log_groups;
 
@@ -34,11 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (search_tx, search_rx) = std::sync::mpsc::channel::<String>();
 
-    let mut app = App {
+    let state = AppState {
         app_title: APP_TITLE.to_string(),
         theme: Theme::default_dark(),
         theme_name: "dark".to_string(),
-        exit: false,
         lines: Vec::new(),
         filter_cursor_pos: 0,
         all_groups: groups.clone(),
@@ -59,15 +58,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         group_search_active: false,
         group_search_input: String::new(),
 
-        search_tx,
-        search_rx,
         searching: false,
         dots: 0,
         last_dots: Instant::now(),
         results_scroll: 0,
 
         tail_mode: false,
-        tail_stop: Arc::new(AtomicBool::new(false)),
         status_message: None,
         status_set_at: None,
 
@@ -76,6 +72,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         save_filter_name: String::new(),
         load_filter_popup_open: false,
         load_filter_selected: 0,
+    };
+
+    let mut app = App {
+        state,
+        exit: false,
+        search_tx,
+        search_rx,
+        tail_stop: Arc::new(AtomicBool::new(false)),
     };
 
     let app_result = app.run(&mut terminal);

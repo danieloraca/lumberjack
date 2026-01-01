@@ -7,80 +7,83 @@ use super::{App, FilterField, SavedFilter};
 
 impl App {
     pub fn open_save_filter_popup(&mut self) {
-        self.save_filter_name.clear();
-        self.save_filter_popup_open = true;
+        self.state.save_filter_name.clear();
+        self.state.save_filter_popup_open = true;
     }
 
     pub fn open_load_filter_popup(&mut self) {
-        if self.saved_filters.is_empty() {
+        if self.state.saved_filters.is_empty() {
             // Try to load from disk lazily
             if let Ok(filters) = Self::load_saved_filters_from_disk() {
-                self.saved_filters = filters;
+                self.state.saved_filters = filters;
             }
         }
 
-        if self.saved_filters.is_empty() {
-            self.status_message = Some("No saved filters".to_string());
-            self.status_set_at = Some(Instant::now());
+        if self.state.saved_filters.is_empty() {
+            self.state.status_message = Some("No saved filters".to_string());
+            self.state.status_set_at = Some(Instant::now());
             return;
         }
 
-        self.load_filter_selected = 0;
-        self.load_filter_popup_open = true;
+        self.state.load_filter_selected = 0;
+        self.state.load_filter_popup_open = true;
     }
 
     pub fn handle_save_filter_popup_key(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc => {
-                self.save_filter_popup_open = false;
+                self.state.save_filter_popup_open = false;
             }
 
             KeyCode::Enter => {
-                if !self.save_filter_name.trim().is_empty() {
-                    let name = self.save_filter_name.trim().to_string();
+                if !self.state.save_filter_name.trim().is_empty() {
+                    let name = self.state.save_filter_name.trim().to_string();
                     let current_group = self
+                        .state
                         .groups
-                        .get(self.selected_group)
+                        .get(self.state.selected_group)
                         .cloned()
                         .unwrap_or_default();
                     // Overwrite if exists
-                    if let Some(existing) = self.saved_filters.iter_mut().find(|f| f.name == name) {
+                    if let Some(existing) =
+                        self.state.saved_filters.iter_mut().find(|f| f.name == name)
+                    {
                         existing.group = current_group.clone();
-                        existing.start = self.filter_start.clone();
-                        existing.end = self.filter_end.clone();
-                        existing.query = self.filter_query.clone();
+                        existing.start = self.state.filter_start.clone();
+                        existing.end = self.state.filter_end.clone();
+                        existing.query = self.state.filter_query.clone();
                     } else {
-                        self.saved_filters.push(SavedFilter {
+                        self.state.saved_filters.push(SavedFilter {
                             name: name.clone(),
                             group: current_group.clone(),
-                            start: self.filter_start.clone(),
-                            end: self.filter_end.clone(),
-                            query: self.filter_query.clone(),
+                            start: self.state.filter_start.clone(),
+                            end: self.state.filter_end.clone(),
+                            query: self.state.filter_query.clone(),
                         });
                     }
 
                     // Best-effort persistence; update status on success or failure
-                    match Self::save_all_filters_to_disk(&self.saved_filters) {
+                    match Self::save_all_filters_to_disk(&self.state.saved_filters) {
                         Ok(()) => {
-                            self.status_message = Some(format!("Saved filter \"{}\"", name));
+                            self.state.status_message = Some(format!("Saved filter \"{}\"", name));
                         }
                         Err(e) => {
-                            self.status_message =
+                            self.state.status_message =
                                 Some(format!("Error saving filter \"{}\": {}", name, e));
                         }
                     }
-                    self.status_set_at = Some(Instant::now());
+                    self.state.status_set_at = Some(Instant::now());
                 }
-                self.save_filter_popup_open = false;
+                self.state.save_filter_popup_open = false;
             }
 
             KeyCode::Backspace => {
-                self.save_filter_name.pop();
+                self.state.save_filter_name.pop();
             }
 
             KeyCode::Char(c) => {
                 if !c.is_control() {
-                    self.save_filter_name.push(c);
+                    self.state.save_filter_name.push(c);
                 }
             }
             _ => {}
@@ -88,50 +91,54 @@ impl App {
     }
 
     pub fn handle_load_filter_popup_key(&mut self, code: KeyCode) {
-        if self.saved_filters.is_empty() {
-            self.load_filter_popup_open = false;
+        if self.state.saved_filters.is_empty() {
+            self.state.load_filter_popup_open = false;
             return;
         }
 
         match code {
             KeyCode::Esc => {
-                self.load_filter_popup_open = false;
+                self.state.load_filter_popup_open = false;
             }
             KeyCode::Up => {
-                if self.load_filter_selected > 0 {
-                    self.load_filter_selected -= 1;
+                if self.state.load_filter_selected > 0 {
+                    self.state.load_filter_selected -= 1;
                 }
             }
             KeyCode::Down => {
-                if self.load_filter_selected + 1 < self.saved_filters.len() {
-                    self.load_filter_selected += 1;
+                if self.state.load_filter_selected + 1 < self.state.saved_filters.len() {
+                    self.state.load_filter_selected += 1;
                 }
             }
             KeyCode::Enter => {
-                if let Some(f) = self.saved_filters.get(self.load_filter_selected) {
+                if let Some(f) = self
+                    .state
+                    .saved_filters
+                    .get(self.state.load_filter_selected)
+                {
                     let start = f.start.clone();
                     let end = f.end.clone();
                     let query = f.query.clone();
                     let group = f.group.clone();
                     let name = f.name.clone();
 
-                    self.filter_start = start;
-                    self.filter_end = end;
-                    self.filter_query = query;
-                    self.filter_field = FilterField::Query;
+                    self.state.filter_start = start;
+                    self.state.filter_end = end;
+                    self.state.filter_query = query;
+                    self.state.filter_field = FilterField::Query;
 
                     if !group.is_empty() {
-                        if let Some(idx) = self.groups.iter().position(|g| g == &group) {
-                            self.selected_group = idx;
+                        if let Some(idx) = self.state.groups.iter().position(|g| g == &group) {
+                            self.state.selected_group = idx;
                             let visible_rows = self.visible_group_rows();
                             self.clamp_groups_scroll(visible_rows);
                         }
                     }
 
-                    self.status_message = Some(format!("Loaded filter \"{}\"", name));
-                    self.status_set_at = Some(Instant::now());
+                    self.state.status_message = Some(format!("Loaded filter \"{}\"", name));
+                    self.state.status_set_at = Some(Instant::now());
                 }
-                self.load_filter_popup_open = false;
+                self.state.load_filter_popup_open = false;
             }
 
             _ => {}
@@ -186,19 +193,20 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AppState;
     use crate::app::{App, Focus};
     use crate::ui::styles::Theme;
-    use std::sync::mpsc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, mpsc};
     use std::time::Instant as StdInstant;
 
     fn app_with_filter_state() -> App {
         let (tx, rx) = mpsc::channel();
 
-        App {
+        let state = AppState {
             app_title: "Test".to_string(),
             theme: Theme::default_dark(),
             theme_name: "dark".to_string(),
-            exit: false,
             lines: Vec::new(),
             filter_cursor_pos: 0,
 
@@ -222,15 +230,12 @@ mod tests {
             group_search_active: false,
             group_search_input: String::new(),
 
-            search_tx: tx,
-            search_rx: rx,
             searching: false,
             dots: 0,
             last_dots: StdInstant::now(),
             results_scroll: 0,
 
             tail_mode: false,
-            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
 
             status_message: None,
             status_set_at: None,
@@ -240,22 +245,30 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+        };
+
+        App {
+            state,
+            exit: false,
+            search_tx: tx,
+            search_rx: rx,
+            tail_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
     #[test]
     fn save_filter_creates_new_entry() {
         let mut app = app_with_filter_state();
-        app.filter_start = "-5m".to_string();
-        app.filter_end = "".to_string();
-        app.filter_query = "routing_id=123".to_string();
+        app.state.filter_start = "-5m".to_string();
+        app.state.filter_end = "".to_string();
+        app.state.filter_query = "routing_id=123".to_string();
 
         app.open_save_filter_popup();
-        app.save_filter_name = "quick-errors".to_string();
+        app.state.save_filter_name = "quick-errors".to_string();
         app.handle_save_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.saved_filters.len(), 1);
-        let f = &app.saved_filters[0];
+        assert_eq!(app.state.saved_filters.len(), 1);
+        let f = &app.state.saved_filters[0];
         assert_eq!(f.name, "quick-errors");
         assert_eq!(f.start, "-5m");
         assert_eq!(f.end, "");
@@ -265,7 +278,7 @@ mod tests {
     #[test]
     fn save_filter_overwrites_existing_entry_with_same_name() {
         let mut app = app_with_filter_state();
-        app.saved_filters.push(SavedFilter {
+        app.state.saved_filters.push(SavedFilter {
             name: "quick-errors".to_string(),
             group: "".to_string(),
             start: "-5m".to_string(),
@@ -273,16 +286,16 @@ mod tests {
             query: "routing_id=111".to_string(),
         });
 
-        app.filter_start = "-15m".to_string();
-        app.filter_end = "".to_string();
-        app.filter_query = "routing_id=222".to_string();
+        app.state.filter_start = "-15m".to_string();
+        app.state.filter_end = "".to_string();
+        app.state.filter_query = "routing_id=222".to_string();
 
         app.open_save_filter_popup();
-        app.save_filter_name = "quick-errors".to_string();
+        app.state.save_filter_name = "quick-errors".to_string();
         app.handle_save_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.saved_filters.len(), 1);
-        let f = &app.saved_filters[0];
+        assert_eq!(app.state.saved_filters.len(), 1);
+        let f = &app.state.saved_filters[0];
         assert_eq!(f.name, "quick-errors");
         assert_eq!(f.start, "-15m");
         assert_eq!(f.end, "");
@@ -292,7 +305,7 @@ mod tests {
     #[test]
     fn load_filter_applies_selected_values_to_filter_fields() {
         let mut app = app_with_filter_state();
-        app.saved_filters.push(SavedFilter {
+        app.state.saved_filters.push(SavedFilter {
             name: "last-hour-errors".to_string(),
             group: "".to_string(),
             start: "-1h".to_string(),
@@ -304,22 +317,22 @@ mod tests {
         // selected index is 0 by default
         app.handle_load_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.filter_start, "-1h");
-        assert_eq!(app.filter_end, "");
-        assert_eq!(app.filter_query, "level=error");
+        assert_eq!(app.state.filter_start, "-1h");
+        assert_eq!(app.state.filter_end, "");
+        assert_eq!(app.state.filter_query, "level=error");
     }
 
     #[test]
     fn load_filter_popup_moves_selection_with_up_down() {
         let mut app = app_with_filter_state();
-        app.saved_filters.push(SavedFilter {
+        app.state.saved_filters.push(SavedFilter {
             name: "first".to_string(),
             group: "".to_string(),
             start: "-5m".to_string(),
             end: "".to_string(),
             query: "a=1".to_string(),
         });
-        app.saved_filters.push(SavedFilter {
+        app.state.saved_filters.push(SavedFilter {
             name: "second".to_string(),
             group: "".to_string(),
             start: "-15m".to_string(),
@@ -328,78 +341,81 @@ mod tests {
         });
 
         app.open_load_filter_popup();
-        assert_eq!(app.load_filter_selected, 0);
+        assert_eq!(app.state.load_filter_selected, 0);
 
         app.handle_load_filter_popup_key(KeyCode::Down);
-        assert_eq!(app.load_filter_selected, 1);
+        assert_eq!(app.state.load_filter_selected, 1);
 
         app.handle_load_filter_popup_key(KeyCode::Up);
-        assert_eq!(app.load_filter_selected, 0);
+        assert_eq!(app.state.load_filter_selected, 0);
     }
 
     #[test]
     fn save_and_load_filter_persists_group_selection() {
         // Set up app with two groups and select the second one
         let mut app = app_with_filter_state();
-        app.groups = vec![
+        app.state.groups = vec![
             "/aws/lambda/first".to_string(),
             "/aws/lambda/second".to_string(),
         ];
-        app.selected_group = 1; // "/aws/lambda/second"
+        app.state.selected_group = 1; // "/aws/lambda/second"
 
-        app.filter_start = "-5m".to_string();
-        app.filter_end = "".to_string();
-        app.filter_query = "routing_id=999".to_string();
+        app.state.filter_start = "-5m".to_string();
+        app.state.filter_end = "".to_string();
+        app.state.filter_query = "routing_id=999".to_string();
 
         app.open_save_filter_popup();
-        app.save_filter_name = "with-group".to_string();
+        app.state.save_filter_name = "with-group".to_string();
         app.handle_save_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.saved_filters.len(), 1);
-        let f = &app.saved_filters[0];
+        assert_eq!(app.state.saved_filters.len(), 1);
+        let f = &app.state.saved_filters[0];
         assert_eq!(f.group, "/aws/lambda/second");
 
         // Reset selection and then load the filter, it should restore the group
-        app.selected_group = 0;
+        app.state.selected_group = 0;
         app.open_load_filter_popup();
         app.handle_load_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.selected_group, 1);
-        assert_eq!(app.groups[app.selected_group], "/aws/lambda/second");
+        assert_eq!(app.state.selected_group, 1);
+        assert_eq!(
+            app.state.groups[app.state.selected_group],
+            "/aws/lambda/second"
+        );
     }
 
     #[test]
     fn load_filter_clamps_groups_scroll_to_show_selected_group() {
         let mut app = app_with_filter_state();
 
-        app.groups = (0..10).map(|i| format!("/aws/lambda/group-{i}")).collect();
+        app.state.groups = (0..10).map(|i| format!("/aws/lambda/group-{i}")).collect();
 
-        app.selected_group = 0;
-        app.groups_scroll = 0;
+        app.state.selected_group = 0;
+        app.state.groups_scroll = 0;
 
-        app.selected_group = 7;
-        app.filter_start = "-5m".to_string();
-        app.filter_end = "".to_string();
-        app.filter_query = "level=error".to_string();
+        app.state.selected_group = 7;
+        app.state.filter_start = "-5m".to_string();
+        app.state.filter_end = "".to_string();
+        app.state.filter_query = "level=error".to_string();
 
         app.open_save_filter_popup();
-        app.save_filter_name = "deep-group".to_string();
+        app.state.save_filter_name = "deep-group".to_string();
         app.handle_save_filter_popup_key(KeyCode::Enter);
 
-        app.selected_group = 0;
-        app.groups_scroll = 0;
+        app.state.selected_group = 0;
+        app.state.groups_scroll = 0;
 
         app.open_load_filter_popup();
         app.handle_load_filter_popup_key(KeyCode::Enter);
 
-        assert_eq!(app.selected_group, 7);
+        assert_eq!(app.state.selected_group, 7);
 
         let visible_rows = app.visible_group_rows();
-        let scroll = app.groups_scroll;
+        let scroll = app.state.groups_scroll;
         assert!(
-            app.selected_group >= scroll && app.selected_group < scroll + visible_rows,
+            app.state.selected_group >= scroll && app.state.selected_group < scroll + visible_rows,
             "expected selected_group {} to be within visible window [{}, {}), but groups_scroll was {} and visible_rows was {}",
-            app.selected_group,
+            app.state.selected_group,
             scroll,
             scroll + visible_rows,
             scroll,

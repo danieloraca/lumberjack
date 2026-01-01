@@ -4,7 +4,7 @@ use std::time::Instant;
 
 impl App {
     pub fn results_text(&self) -> String {
-        self.lines.join("\n")
+        self.state.lines.join("\n")
     }
 
     pub fn copy_results_to_clipboard(&mut self) {
@@ -15,9 +15,11 @@ impl App {
 
         if let Ok(mut clipboard) = Clipboard::new() {
             if clipboard.set_text(text.clone()).is_ok() {
-                self.status_message =
-                    Some(format!("Copied {} lines to clipboard", self.lines.len()));
-                self.status_set_at = Some(Instant::now());
+                self.state.status_message = Some(format!(
+                    "Copied {} lines to clipboard",
+                    self.state.lines.len()
+                ));
+                self.state.status_set_at = Some(Instant::now());
             }
         }
     }
@@ -25,19 +27,20 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use crate::app::state::AppState;
     use crate::app::{App, FilterField, Focus};
     use crate::ui::styles::Theme;
-    use std::sync::mpsc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, mpsc};
     use std::time::Instant as StdInstant;
 
     fn app_with_results(lines: Vec<&str>) -> App {
         let (tx, rx) = mpsc::channel();
 
-        App {
+        let state = AppState {
             app_title: "Test".to_string(),
             theme: Theme::default_dark(),
             theme_name: "dark".to_string(),
-            exit: false,
             lines: lines.into_iter().map(|s| s.to_string()).collect(),
             filter_cursor_pos: 0,
 
@@ -61,15 +64,11 @@ mod tests {
             group_search_active: false,
             group_search_input: String::new(),
 
-            search_tx: tx,
-            search_rx: rx,
             searching: false,
             dots: 0,
             last_dots: StdInstant::now(),
             results_scroll: 0,
-
             tail_mode: false,
-            tail_stop: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
 
             status_message: None,
             status_set_at: None,
@@ -79,6 +78,14 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+        };
+
+        App {
+            state,
+            exit: false,
+            search_tx: tx,
+            search_rx: rx,
+            tail_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -102,6 +109,6 @@ mod tests {
         let mut app = app_with_results(Vec::new());
         // Should not panic or set a status when there is nothing to copy.
         app.copy_results_to_clipboard();
-        assert!(app.status_message.is_none());
+        assert!(app.state.status_message.is_none());
     }
 }
