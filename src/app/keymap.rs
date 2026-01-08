@@ -41,12 +41,9 @@ impl App {
                         self.state.results_detail_scroll.saturating_add(1);
                 }
                 // While in the results detail popup, allow 'y' to copy only the
-                // selected result line to the clipboard, then close the popup.
+                // selected result line to the clipboard, but keep the popup open.
                 KeyCode::Char('y') => {
                     self.copy_selected_result_to_clipboard();
-                    self.state.results_detail_popup_open = false;
-                    self.state.results_detail_selected_line = None;
-                    self.state.results_detail_scroll = 0;
                 }
                 _ => {}
             }
@@ -494,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn yank_in_results_detail_popup_copies_and_closes() {
+    fn yank_in_results_detail_popup_copies_and_leaves_open() {
         let mut app = app_with_filter_query("");
         app.state.focus = Focus::Results;
         app.state.lines = vec!["line0".to_string(), "line1".to_string()];
@@ -504,10 +501,9 @@ mod tests {
         app.handle_key_event(key(KeyCode::Enter)).unwrap();
         assert!(app.state.results_detail_popup_open);
 
-        // Press 'y' inside popup: should copy (reusing existing logic) and close
+        // Press 'y' inside popup: should copy the selected line and keep popup open
         app.handle_key_event(key(KeyCode::Char('y'))).unwrap();
-        assert!(!app.state.results_detail_popup_open);
-        assert_eq!(app.state.results_detail_selected_line, None);
-        assert_eq!(app.state.results_detail_scroll, 0);
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(1));
     }
 }

@@ -39,7 +39,8 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - Move a highlight through Results with `↑` / `↓`
   - Press `Enter` or `Space` on a selected line to open a **Result detail** popup
   - Popup shows the full line with word wrapping and vertical scrolling
-  - Press `y` in the popup to copy just the selected line to the clipboard
+  - When a JSON `"sql"` field is present, the popup shows the SQL query as a nicely formatted, multi-line block
+  - Press `y` in the popup to copy the formatted SQL (or the selected line when not SQL) to the clipboard
 - ⌨️ Keyboard-driven UI
   - `/` fuzzy-search groups
   - `1/2/3/4` for time presets
@@ -93,5 +94,5 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 - `Esc` – Cancel editing, group search, or close popups
 - `y` – Copy all Results to clipboard (when Results pane is focused and no popup is open)
 - `Space` – In Results pane, open Result detail popup for the highlighted line
-- `Y` – In Result detail popup, copy only the selected line to clipboard and close the popup
+- `y` – In Result detail popup, copy the formatted SQL when a JSON `"sql"` field is present (otherwise copy the selected line); popup remains open
 - `q` – Quit (except while editing or in group search)

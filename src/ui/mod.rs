@@ -6,6 +6,7 @@ use ratatui::prelude::Rect;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Widget};
+use sqlformat::{self, Dialect, FormatOptions, Indent, QueryParams};
 
 use crate::app::{App, FilterField, Focus};
 
@@ -462,12 +463,16 @@ impl Widget for &App {
                 .cloned()
                 .unwrap_or_else(|| "<no line>".to_string());
 
+            // For the popup, if we detect a JSON sql field, render only the
+            // pretty-printed SQL query. Otherwise, show the original content.
+            let display_content = format_sql_for_popup(&content);
+
             let available_height = inner.height.saturating_sub(1);
             let scroll = self.state.results_detail_scroll as u16;
 
             let popup_fg = theme.popup_block.fg.unwrap_or(Color::White);
 
-            let paragraph = ratatui::widgets::Paragraph::new(content)
+            let paragraph = ratatui::widgets::Paragraph::new(display_content)
                 .wrap(ratatui::widgets::Wrap { trim: false })
                 .scroll((scroll, 0))
                 .style(Style::default().fg(popup_fg).bg(popup_bg));
@@ -482,7 +487,7 @@ impl Widget for &App {
                 buf,
             );
 
-            Line::from("Enter/Space/Esc to close the popup | y to copy selected line")
+            Line::from("Enter/Space/Esc to close the popup | Y copy selected line")
                 .style(styles::default_gray(&theme).bg(popup_bg))
                 .render(
                     Rect {
@@ -495,6 +500,76 @@ impl Widget for &App {
                 );
         }
     }
+}
+
+fn format_sql_for_popup(line: &str) -> String {
+    if let Some(formatted) = format_json_sql_field(line) {
+        // When we have a JSON sql field, show only the pretty-printed query.
+        return formatted;
+    }
+    line.to_string()
+}
+
+fn format_json_sql_field(line: &str) -> Option<String> {
+    // Look for a JSON `"sql": "<value>"` field and pretty-print that value.
+    let sql_key_pos = line.find("\"sql\"")?;
+    let after_key = &line[sql_key_pos..];
+    let colon_rel = after_key.find(':')?;
+    let colon_pos = sql_key_pos + colon_rel;
+
+    // Find starting quote of the SQL string
+    let chars: Vec<char> = line.chars().collect();
+    let mut start = None;
+    for i in colon_pos + 1..chars.len() {
+        if chars[i].is_whitespace() {
+            continue;
+        }
+        if chars[i] == '"' {
+            start = Some(i + 1);
+        }
+        break;
+    }
+    let start = start?;
+
+    // Find the closing quote (next unescaped `"`)
+    let mut end = None;
+    let mut i = start;
+    while i < chars.len() {
+        if chars[i] == '"' {
+            let mut backslashes = 0;
+            let mut j = i;
+            while j > 0 && chars[j - 1] == '\\' {
+                backslashes += 1;
+                j -= 1;
+            }
+            if backslashes % 2 == 0 {
+                end = Some(i);
+                break;
+            }
+        }
+        i += 1;
+    }
+    let end = end?;
+
+    let sql_raw: String = chars[start..end].iter().collect();
+
+    // Use sqlformat to pretty-print the SQL value.
+    let mut opts = FormatOptions::default();
+    opts.indent = Indent::Spaces(2);
+    opts.uppercase = Some(true);
+    opts.lines_between_queries = 1;
+    opts.ignore_case_convert = None;
+    opts.inline = false;
+    opts.max_inline_block = 50;
+    opts.max_inline_arguments = None;
+    opts.max_inline_top_level = None;
+    opts.joins_as_top_level = false;
+    opts.dialect = Dialect::Generic;
+
+    let formatted_sql = sqlformat::format(&sql_raw, &QueryParams::None, &opts);
+
+    // For popup display, just show the formatted SQL itself.
+    Some(formatted_sql)
 }
 
 #[cfg(test)]
