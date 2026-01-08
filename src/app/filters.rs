@@ -146,8 +146,6 @@ impl App {
     }
 
     fn filters_path() -> Result<PathBuf, String> {
-        // In tests, write filters to a separate location so we don't overwrite
-        // the user's real filters.
         if cfg!(test) {
             let home = std::env::var("HOME").map_err(|e| format!("HOME not set: {e}"))?;
             let mut path = PathBuf::from(home);

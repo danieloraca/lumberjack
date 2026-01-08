@@ -209,10 +209,6 @@ impl Widget for &App {
 
         // ---- fake blinking cursor inside the active filter field ----
         if self.state.focus == Focus::Filter && self.state.editing && self.state.cursor_on {
-            // Which row is the active field on?
-            //
-            // NOTE: The presets hint is non-interactive; only the text fields and
-            // the Search button participate in cursor positioning.
             let field_row = match self.state.filter_field {
                 FilterField::Start => 0,
                 FilterField::End => 1,
@@ -466,12 +462,9 @@ impl Widget for &App {
                 .cloned()
                 .unwrap_or_else(|| "<no line>".to_string());
 
-            // Use a Paragraph with word wrapping and a simple vertical scroll offset.
-            // We leave 1 row at the bottom for the hint line.
             let available_height = inner.height.saturating_sub(1);
             let scroll = self.state.results_detail_scroll as u16;
 
-            // Match the popup_block foreground/background for paragraph text.
             let popup_fg = theme.popup_block.fg.unwrap_or(Color::White);
 
             let paragraph = ratatui::widgets::Paragraph::new(content)
@@ -489,8 +482,6 @@ impl Widget for &App {
                 buf,
             );
 
-            // Hint line at bottom, with same background as popup_block so the
-            // popup interior remains opaque.
             Line::from("Enter/Space/Esc to close the popup | y to copy selected line")
                 .style(styles::default_gray(&theme).bg(popup_bg))
                 .render(

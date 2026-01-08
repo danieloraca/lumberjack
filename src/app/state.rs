@@ -46,7 +46,6 @@ pub struct AppState {
     pub load_filter_popup_open: bool,
     pub load_filter_selected: usize,
 
-    // Results detail popup: whether it's open and which line is shown, and vertical scroll.
     pub results_detail_popup_open: bool,
     pub results_detail_selected_line: Option<usize>,
     pub results_detail_scroll: usize,

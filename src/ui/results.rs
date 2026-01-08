@@ -1,6 +1,5 @@
 use crate::app::App;
 use ratatui::prelude::{Buffer, Rect};
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 

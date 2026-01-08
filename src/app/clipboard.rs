@@ -24,13 +24,6 @@ impl App {
         }
     }
 
-    /// Copy only the currently selected result line to the clipboard.
-    ///
-    /// This uses the same flattening logic as the results renderer and popup:
-    /// - Each entry in `state.lines` may contain embedded newlines.
-    /// - We split entries into individual lines and build a flat list.
-    /// - The index comes from `results_detail_selected_line` when present,
-    ///   otherwise it falls back to `results_selected`.
     pub fn copy_selected_result_to_clipboard(&mut self) {
         // Flatten entries into individual lines.
         let mut flat: Vec<String> = Vec::new();
