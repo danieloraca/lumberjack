@@ -1,5 +1,6 @@
 use crate::app::App;
 use ratatui::prelude::{Buffer, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
@@ -194,6 +195,8 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
         };
 
         App {
@@ -257,6 +260,39 @@ mod tests {
             rendered.contains("Max Memory Used: 272 MB"),
             "expected 'Max Memory Used: 272 MB' in rendered output, got:\n{}",
             rendered
+        );
+    }
+
+    #[test]
+    fn selected_line_uses_results_selected_style() {
+        let mut app = make_results_app(vec![
+            "2025-12-22T21:25:28.694+00:00 first line",
+            "2025-12-22T21:25:29.694+00:00 second line",
+        ]);
+
+        // Select the second line
+        app.state.results_selected = 1;
+
+        let area = Rect::new(0, 0, 80, 4);
+        let mut buf = Buffer::empty(area);
+
+        app.render_results(area, &mut buf);
+
+        // The second visual line (y = 1) should have the results_selected background.
+        let y_selected = area.y + 1;
+        let mut has_selected_bg = false;
+        for x in area.x..area.x + area.width {
+            if let Some(cell) = buf.cell((x, y_selected)) {
+                if cell.style().bg == app.state.theme.results_selected.bg {
+                    has_selected_bg = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(
+            has_selected_bg,
+            "expected selected line to use results_selected background style"
         );
     }
 

@@ -525,6 +525,8 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
         };
 
         App {

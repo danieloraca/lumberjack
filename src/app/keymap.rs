@@ -21,6 +21,17 @@ impl App {
             self.handle_load_filter_popup_key(key_event.code);
             return Ok(());
         }
+        if self.state.results_detail_popup_open {
+            match key_event.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
+                    // Close the results detail popup on Esc, Enter, or Space.
+                    self.state.results_detail_popup_open = false;
+                    self.state.results_detail_selected_line = None;
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
 
         match key_event.code {
             // q should NOT quit while editing or while group search is active
@@ -117,9 +128,13 @@ impl App {
                 }
             }
 
-            // Enter: start/stop editing, or activate Search button
+            // Enter: start/stop editing, or activate Search button, or open results detail popup
             KeyCode::Enter => {
-                if self.state.focus == Focus::Filter
+                if !self.state.editing && self.state.focus == Focus::Results {
+                    // Open results detail popup for the currently selected results line.
+                    self.state.results_detail_popup_open = true;
+                    self.state.results_detail_selected_line = Some(self.state.results_selected);
+                } else if self.state.focus == Focus::Filter
                     && self.state.filter_field == FilterField::Search
                     && !self.state.editing
                 {
@@ -144,6 +159,12 @@ impl App {
                 Focus::Filter => self.filter_next(),
                 Focus::Results => self.results_down(),
             },
+
+            // Open results detail popup with Space on selected line
+            KeyCode::Char(' ') if !self.state.editing && self.state.focus == Focus::Results => {
+                self.state.results_detail_popup_open = true;
+                self.state.results_detail_selected_line = Some(self.state.results_selected);
+            }
 
             // Copy results to clipboard (Results pane, not editing)
             KeyCode::Char('y') if !self.state.editing && self.state.focus == Focus::Results => {
@@ -284,6 +305,8 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
         };
 
         App {
@@ -337,5 +360,75 @@ mod tests {
         // Third T: green -> dark
         app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
         assert_eq!(app.state.theme_name, "dark");
+    }
+
+    #[test]
+    fn enter_opens_results_detail_popup_for_selected_line() {
+        let mut app = app_with_filter_query("");
+        // Move focus to Results and simulate having some lines
+        app.state.focus = Focus::Results;
+        app.state.lines = vec![
+            "line 0".to_string(),
+            "line 1".to_string(),
+            "line 2".to_string(),
+        ];
+        app.state.results_selected = 1;
+
+        // Press Enter: should open the popup for the selected line
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(1));
+    }
+
+    #[test]
+    fn space_opens_results_detail_popup_for_selected_line() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec![
+            "l0".to_string(),
+            "l1".to_string(),
+        ];
+        app.state.results_selected = 0;
+
+        // Press Space: should open the popup for the selected line
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(0));
+    }
+
+    #[test]
+    fn enter_space_esc_close_results_detail_popup() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec!["only".to_string()];
+        app.state.results_selected = 0;
+
+        // Open popup first
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Enter
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(!app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, None);
+
+        // Open again
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Space
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(!app.state.results_detail_popup_open);
+
+        // Open again
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Esc
+        app.handle_key_event(key(KeyCode::Esc)).unwrap();
+        assert!(!app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, None);
     }
 }

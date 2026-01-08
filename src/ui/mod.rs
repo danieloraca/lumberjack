@@ -417,6 +417,75 @@ impl Widget for &App {
                     buf,
                 );
         }
+
+        if self.state.results_detail_popup_open {
+            // Results detail popup showing the currently selected results line.
+            let popup_width = 80u16.min(area.width);
+            let popup_height = 6u16.min(area.height);
+            let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+            let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+
+            let popup_area = Rect {
+                x: popup_x,
+                y: popup_y,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            let block = Block::bordered()
+                .title("Result detail")
+                .style(styles::popup_block(&theme))
+                .border_style(styles::popup_border(&theme));
+            let inner = block.inner(popup_area);
+            block.render(popup_area, buf);
+
+            // Resolve selected line index into the flattened results.
+            let selected_idx = self.state.results_detail_selected_line.unwrap_or(0);
+            let mut flat: Vec<String> = Vec::new();
+            for entry in &self.state.lines {
+                for l in entry.lines() {
+                    flat.push(l.to_string());
+                }
+            }
+            let content = flat
+                .get(selected_idx)
+                .cloned()
+                .unwrap_or_else(|| "<no line>".to_string());
+
+            // Render content (trim or pad to width).
+            let display = if content.len() > popup_width as usize {
+                let mut s = content.chars().take(popup_width as usize - 3).collect::<String>();
+                s.push_str("...");
+                s
+            } else {
+                content
+            };
+
+            Line::from(display)
+                .style(Style::default().fg(Color::White))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y,
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+
+            // Hint line at bottom
+            Line::from("Enter/Space/Esc to close")
+                .style(styles::default_gray(&theme))
+                .render(
+                    Rect {
+                        x: inner.x,
+                        y: inner.y + inner.height.saturating_sub(1),
+                        width: inner.width,
+                        height: 1,
+                    },
+                    buf,
+                );
+        }
     }
 }
 
@@ -476,6 +545,8 @@ mod ui_tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
         };
 
         App {
