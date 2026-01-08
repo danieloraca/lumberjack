@@ -34,7 +34,7 @@ pub struct AppState {
     pub dots: usize,
     pub last_dots: Instant,
     pub results_scroll: usize,
-
+    pub results_selected: usize,
     pub tail_mode: bool,
 
     pub status_message: Option<String>,
@@ -45,4 +45,8 @@ pub struct AppState {
     pub save_filter_name: String,
     pub load_filter_popup_open: bool,
     pub load_filter_selected: usize,
+
+    pub results_detail_popup_open: bool,
+    pub results_detail_selected_line: Option<usize>,
+    pub results_detail_scroll: usize,
 }

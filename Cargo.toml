@@ -1,6 +1,6 @@
 [package]
 name = "lumberjack"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 
 [dependencies]
@@ -13,6 +13,7 @@ tokio = {version="1.48.0", default-features = false, features = ["rt-multi-threa
 arboard = { version = "3.6.1", default-features = false }
 serde = {version = "1.0.228", default-features = false, features = ["derive"]}
 thiserror = "2.0.17"
+sqlformat = { version = "0.5.0", default-features = false }
 
 [profile.release]
 lto = true

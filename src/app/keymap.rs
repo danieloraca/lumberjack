@@ -21,6 +21,34 @@ impl App {
             self.handle_load_filter_popup_key(key_event.code);
             return Ok(());
         }
+        if self.state.results_detail_popup_open {
+            match key_event.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
+                    // Close the results detail popup on Esc, Enter, or Space.
+                    self.state.results_detail_popup_open = false;
+                    self.state.results_detail_selected_line = None;
+                    self.state.results_detail_scroll = 0;
+                }
+                KeyCode::Up => {
+                    // Scroll up within the detail popup (saturating at 0).
+                    self.state.results_detail_scroll =
+                        self.state.results_detail_scroll.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    // Scroll down within the detail popup; we let the Paragraph
+                    // handle clamping, so this can grow without precomputing max.
+                    self.state.results_detail_scroll =
+                        self.state.results_detail_scroll.saturating_add(1);
+                }
+                // While in the results detail popup, allow 'y' to copy only the
+                // selected result line to the clipboard, but keep the popup open.
+                KeyCode::Char('y') => {
+                    self.copy_selected_result_to_clipboard();
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
 
         match key_event.code {
             // q should NOT quit while editing or while group search is active
@@ -117,9 +145,14 @@ impl App {
                 }
             }
 
-            // Enter: start/stop editing, or activate Search button
+            // Enter: start/stop editing, or activate Search button, or open results detail popup
             KeyCode::Enter => {
-                if self.state.focus == Focus::Filter
+                if !self.state.editing && self.state.focus == Focus::Results {
+                    // Open results detail popup for the currently selected results line.
+                    self.state.results_detail_popup_open = true;
+                    self.state.results_detail_selected_line = Some(self.state.results_selected);
+                    self.state.results_detail_scroll = 0;
+                } else if self.state.focus == Focus::Filter
                     && self.state.filter_field == FilterField::Search
                     && !self.state.editing
                 {
@@ -145,8 +178,19 @@ impl App {
                 Focus::Results => self.results_down(),
             },
 
-            // Copy results to clipboard (Results pane, not editing)
-            KeyCode::Char('y') if !self.state.editing && self.state.focus == Focus::Results => {
+            // Open results detail popup with Space on selected line
+            KeyCode::Char(' ') if !self.state.editing && self.state.focus == Focus::Results => {
+                self.state.results_detail_popup_open = true;
+                self.state.results_detail_selected_line = Some(self.state.results_selected);
+                self.state.results_detail_scroll = 0;
+            }
+
+            // Copy results to clipboard (Results pane, not editing, and no popup)
+            KeyCode::Char('y')
+                if !self.state.editing
+                    && self.state.focus == Focus::Results
+                    && !self.state.results_detail_popup_open =>
+            {
                 self.copy_results_to_clipboard();
             }
 
@@ -272,6 +316,7 @@ mod tests {
             dots: 0,
             last_dots: StdInstant::now(),
             results_scroll: 0,
+            results_selected: 0,
 
             tail_mode: false,
 
@@ -283,6 +328,9 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {
@@ -336,5 +384,126 @@ mod tests {
         // Third T: green -> dark
         app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
         assert_eq!(app.state.theme_name, "dark");
+    }
+
+    #[test]
+    fn results_detail_popup_scrolls_with_up_down() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        // Very long line that will wrap across multiple rows in the popup.
+        app.state.lines = vec![
+            "This is a very long log line that should wrap across multiple lines in the result detail popup when rendered with a Paragraph widget."
+                .to_string(),
+        ];
+        app.state.results_selected = 0;
+
+        // Open popup
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_scroll, 0);
+
+        // Scroll down a few steps
+        app.handle_key_event(key(KeyCode::Down)).unwrap();
+        app.handle_key_event(key(KeyCode::Down)).unwrap();
+        assert!(
+            app.state.results_detail_scroll >= 2,
+            "expected scroll to increase when pressing Down"
+        );
+
+        // Scroll up; should not go below 0
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        assert_eq!(
+            app.state.results_detail_scroll, 0,
+            "expected scroll to saturate at 0 when scrolling up"
+        );
+    }
+
+    #[test]
+    fn enter_opens_results_detail_popup_for_selected_line() {
+        let mut app = app_with_filter_query("");
+        // Move focus to Results and simulate having some lines
+        app.state.focus = Focus::Results;
+        app.state.lines = vec![
+            "line 0".to_string(),
+            "line 1".to_string(),
+            "line 2".to_string(),
+        ];
+        app.state.results_selected = 1;
+
+        // Press Enter: should open the popup for the selected line
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(1));
+    }
+
+    #[test]
+    fn space_opens_results_detail_popup_for_selected_line() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec![
+            "l0".to_string(),
+            "l1".to_string(),
+        ];
+        app.state.results_selected = 0;
+
+        // Press Space: should open the popup for the selected line
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(0));
+    }
+
+    #[test]
+    fn enter_space_esc_close_results_detail_popup() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec!["only".to_string()];
+        app.state.results_selected = 0;
+
+        // Open popup first
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Enter
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(!app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, None);
+
+        // Open again
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Space
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(!app.state.results_detail_popup_open);
+
+        // Open again
+        app.handle_key_event(key(KeyCode::Char(' '))).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Close with Esc
+        app.handle_key_event(key(KeyCode::Esc)).unwrap();
+        assert_eq!(app.state.results_detail_popup_open, false);
+        assert_eq!(app.state.results_detail_selected_line, None);
+    }
+
+    #[test]
+    fn yank_in_results_detail_popup_copies_and_leaves_open() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec!["line0".to_string(), "line1".to_string()];
+        app.state.results_selected = 1;
+
+        // Open popup
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Press 'y' inside popup: should copy the selected line and keep popup open
+        app.handle_key_event(key(KeyCode::Char('y'))).unwrap();
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_selected_line, Some(1));
     }
 }

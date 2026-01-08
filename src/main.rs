@@ -68,6 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dots: 0,
         last_dots: Instant::now(),
         results_scroll: 0,
+        results_selected: 0,
 
         tail_mode: false,
         status_message: None,
@@ -78,6 +79,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         save_filter_name: String::new(),
         load_filter_popup_open: false,
         load_filter_selected: 0,
+        results_detail_popup_open: false,
+        results_detail_selected_line: None,
+        results_detail_scroll: 0,
     };
 
     let mut app = App {

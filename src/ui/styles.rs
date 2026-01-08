@@ -31,6 +31,7 @@ pub struct Theme {
     pub presets_hint: Style,
     pub cursor: Style,
     pub results_timestamp: Style,
+    pub results_selected: Style,
 }
 
 impl Theme {
@@ -83,6 +84,10 @@ impl Theme {
             results_timestamp: Style::default()
                 .fg(Color::Rgb(100, 180, 180))
                 .bg(Color::Rgb(5, 5, 5))
+                .add_modifier(Modifier::BOLD),
+            results_selected: Style::default()
+                .fg(Color::White)
+                .bg(Color::Rgb(50, 50, 50))
                 .add_modifier(Modifier::BOLD),
         }
     }
@@ -151,6 +156,12 @@ impl Theme {
             .fg(Color::Rgb(0, 100, 180))
             .bg(bg)
             .add_modifier(Modifier::BOLD);
+
+        t.results_selected = Style::default()
+            .fg(Color::White)
+            .bg(Color::Rgb(50, 50, 50))
+            .add_modifier(Modifier::BOLD);
+
         t
     }
 
@@ -233,6 +244,12 @@ impl Theme {
             .fg(Color::Rgb(0, 180, 180))
             .bg(dark_bg)
             .add_modifier(Modifier::BOLD);
+
+        t.results_selected = Style::default()
+            .fg(Color::White)
+            .bg(Color::Rgb(50, 50, 50))
+            .add_modifier(Modifier::BOLD);
+
         t
     }
 }

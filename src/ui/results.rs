@@ -22,6 +22,8 @@ impl App {
             return;
         }
 
+        let results_focused = self.state.focus == crate::app::Focus::Results;
+
         // Flatten entries into raw lines (no manual wrapping).
         let mut raw_lines: Vec<String> = Vec::new();
         for entry in &self.state.lines {
@@ -50,6 +52,8 @@ impl App {
 
         for (i, line) in raw_lines[start..end].iter().enumerate() {
             let y = text_area.y + i as u16;
+            let global_idx = start + i;
+            let is_selected = results_focused && global_idx == self.state.results_selected;
 
             let expanded = if line.contains('\t') {
                 line.replace('\t', "    ")
@@ -79,10 +83,19 @@ impl App {
                 // Everything after the timestamp (including the space if present)
                 let rest: String = chars.collect();
 
-                let ts_style = theme.results_timestamp;
+                let ts_style = if is_selected {
+                    theme.results_selected
+                } else {
+                    theme.results_timestamp
+                };
 
                 let spans = if rest.is_empty() {
                     vec![Span::styled(ts, ts_style)]
+                } else if is_selected {
+                    vec![
+                        Span::styled(ts, ts_style),
+                        Span::styled(rest, theme.results_selected),
+                    ]
                 } else {
                     vec![Span::styled(ts, ts_style), Span::raw(rest)]
                 };
@@ -98,7 +111,11 @@ impl App {
                 );
             } else {
                 // No special timestamp; render the whole line normally.
-                Line::from(expanded.as_str()).render(
+                let mut line = Line::from(expanded.as_str());
+                if is_selected {
+                    line = line.style(theme.results_selected);
+                }
+                line.render(
                     Rect {
                         x: text_area.x,
                         y,
@@ -166,6 +183,7 @@ mod tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+            results_selected: 0,
             tail_mode: false,
 
             status_message: None,
@@ -176,6 +194,9 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {
@@ -239,6 +260,39 @@ mod tests {
             rendered.contains("Max Memory Used: 272 MB"),
             "expected 'Max Memory Used: 272 MB' in rendered output, got:\n{}",
             rendered
+        );
+    }
+
+    #[test]
+    fn selected_line_uses_results_selected_style() {
+        let mut app = make_results_app(vec![
+            "2025-12-22T21:25:28.694+00:00 first line",
+            "2025-12-22T21:25:29.694+00:00 second line",
+        ]);
+
+        // Select the second line
+        app.state.results_selected = 1;
+
+        let area = Rect::new(0, 0, 80, 4);
+        let mut buf = Buffer::empty(area);
+
+        app.render_results(area, &mut buf);
+
+        // The second visual line (y = 1) should have the results_selected background.
+        let y_selected = area.y + 1;
+        let mut has_selected_bg = false;
+        for x in area.x..area.x + area.width {
+            if let Some(cell) = buf.cell((x, y_selected)) {
+                if cell.style().bg == app.state.theme.results_selected.bg {
+                    has_selected_bg = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(
+            has_selected_bg,
+            "expected selected line to use results_selected background style"
         );
     }
 

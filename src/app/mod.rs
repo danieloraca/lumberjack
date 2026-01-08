@@ -182,7 +182,14 @@ impl App {
     }
 
     fn results_up(&mut self) {
-        self.state.results_scroll = self.state.results_scroll.saturating_sub(1);
+        if self.state.results_selected > 0 {
+            self.state.results_selected -= 1;
+        }
+
+        // Ensure scroll keeps the selected row visible at the top
+        if self.state.results_selected < self.state.results_scroll {
+            self.state.results_scroll = self.state.results_selected;
+        }
     }
 
     fn results_total_lines(&self) -> usize {
@@ -191,8 +198,25 @@ impl App {
 
     fn results_down(&mut self) {
         let total = self.results_total_lines();
-        if self.state.results_scroll + 1 < total {
-            self.state.results_scroll += 1;
+        if self.state.results_selected + 1 < total {
+            self.state.results_selected += 1;
+        }
+
+        // Assume a fixed visible height of 4 rows for clamping purposes.
+        // This keeps the selected row within a small window while navigating.
+        let visible_rows = 4usize;
+        if self.state.results_selected >= self.state.results_scroll + visible_rows {
+            self.state.results_scroll = self
+                .state
+                .results_selected
+                .saturating_add(1)
+                .saturating_sub(visible_rows);
+        }
+
+        // Also ensure we don't scroll past the last line
+        let max_scroll = total.saturating_sub(visible_rows);
+        if self.state.results_scroll > max_scroll {
+            self.state.results_scroll = max_scroll;
         }
     }
 
@@ -266,7 +290,8 @@ impl App {
         self.state.last_dots = Instant::now();
         self.state.focus = Focus::Results; // lose focus from form
         self.state.editing = false;
-        self.state.lines.clear(); // optional
+        self.state.lines.clear();
+        self.reset_results_scroll();
         self.state.results_scroll = 0;
         self.tail_stop.store(false, Ordering::Relaxed);
 
@@ -447,6 +472,11 @@ impl App {
             }
         }
     }
+
+    fn reset_results_scroll(&mut self) {
+        self.state.results_scroll = 0;
+        self.state.results_selected = 0;
+    }
 }
 
 #[cfg(test)]
@@ -489,6 +519,7 @@ mod tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+            results_selected: 0,
 
             tail_mode: false,
 
@@ -500,6 +531,70 @@ mod tests {
             save_filter_name: String::new(),
             load_filter_popup_open: false,
             load_filter_selected: 0,
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
+            results_detail_scroll: 0,
+        };
+
+        App {
+            state,
+            exit: false,
+            search_tx: tx,
+            search_rx: rx,
+            tail_stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn app_with_results_state(lines: Vec<&str>) -> App {
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let state = AppState {
+            app_title: "Test".to_string(),
+            theme: Theme::default_dark(),
+            theme_name: "dark".to_string(),
+            lines: lines.into_iter().map(|s| s.to_string()).collect(),
+            filter_cursor_pos: 0,
+
+            all_groups: Vec::new(),
+            groups: Vec::new(),
+            selected_group: 0,
+            groups_scroll: 0,
+
+            profile: "test-profile".to_string(),
+            region: "eu-west-1".to_string(),
+            focus: Focus::Results,
+
+            filter_start: String::new(),
+            filter_end: String::new(),
+            filter_query: String::new(),
+            filter_field: FilterField::Query,
+            editing: false,
+            cursor_on: true,
+            last_blink: Instant::now(),
+
+            group_search_active: false,
+            group_search_input: String::new(),
+
+            searching: false,
+            dots: 0,
+            last_dots: Instant::now(),
+            results_scroll: 0,
+            results_selected: 0,
+
+            tail_mode: false,
+
+            status_message: None,
+            status_set_at: None,
+
+            saved_filters: Vec::new(),
+            save_filter_popup_open: false,
+            save_filter_name: String::new(),
+            load_filter_popup_open: false,
+            load_filter_selected: 0,
+
+            results_detail_popup_open: false,
+            results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {
@@ -632,5 +727,24 @@ mod tests {
             app.state.status_set_at.is_none(),
             "expected status_set_at to be cleared after timeout"
         );
+    }
+
+    #[test]
+    fn reset_results_scroll_resets_offset_and_selection() {
+        let mut app = app_with_results_state(vec![
+            "line 1",
+            "line 2",
+            "line 3",
+            "line 4",
+        ]);
+
+        // Simulate having scrolled and selected somewhere in the middle
+        app.state.results_scroll = 2;
+        app.state.results_selected = 3;
+
+        app.reset_results_scroll();
+
+        assert_eq!(app.state.results_scroll, 0, "results_scroll should be reset to 0");
+        assert_eq!(app.state.results_selected, 0, "results_selected should be reset to 0");
     }
 }

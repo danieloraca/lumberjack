@@ -35,6 +35,12 @@ Built in **Rust**, powered by **ratatui**, **crossterm**, and the **AWS SDK for 
   - Keeps underlying log lines intact for copying
   - Designed to play nicely with large, structured payloads
 - 📜 Scrollable results with a real scrollbar (no infinite-scroll roulette)
+- 🔎 Result selection & popup detail view
+  - Move a highlight through Results with `↑` / `↓`
+  - Press `Enter` or `Space` on a selected line to open a **Result detail** popup
+  - Popup shows the full line with word wrapping and vertical scrolling
+  - When a JSON `"sql"` field is present, the popup shows the SQL query as a nicely formatted, multi-line block
+  - Press `y` in the popup to copy the formatted SQL (or the selected line when not SQL) to the clipboard
 - ⌨️ Keyboard-driven UI
   - `/` fuzzy-search groups
   - `1/2/3/4` for time presets
@@ -78,13 +84,15 @@ cargo run -- --profile=<aws-profile> --region=<aws-region>
 
 - `Tab` – Switch between Groups / Filter / Results
 - `/` – Fuzzy-search log groups (when Groups pane is focused)
-- `↑` / `↓` – Move selection / scroll
-- `Enter` – Edit filter field / run search
+- `↑` / `↓` – Move selection / scroll (and move the highlighted result row when Results pane is focused)
+- `Enter` – Edit filter field / run search; in Results pane, opens Result detail popup for the highlighted line
 - `1` / `2` / `3` / `4` – Quick time presets for **Start** (sets Start to `-5m` / `-15m` / `-1h` / `-24h`, and clears End to “now”)
 - `s` – Save current filter (opens name popup; persists to `~/.config/lumberjack/filters.json`)
 - `F` – Load saved filter (opens popup with saved filter names)
 - `t` – Toggle tail/stream mode for results
 - `T` – Cycle color themes (Dark → Light → Green CRT)
 - `Esc` – Cancel editing, group search, or close popups
-- `y` – Copy all Results to clipboard (when Results pane is focused)
+- `y` – Copy all Results to clipboard (when Results pane is focused and no popup is open)
+- `Space` – In Results pane, open Result detail popup for the highlighted line
+- `y` – In Result detail popup, copy the formatted SQL when a JSON `"sql"` field is present (otherwise copy the selected line); popup remains open
 - `q` – Quit (except while editing or in group search)
