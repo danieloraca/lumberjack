@@ -182,7 +182,14 @@ impl App {
     }
 
     fn results_up(&mut self) {
-        self.state.results_scroll = self.state.results_scroll.saturating_sub(1);
+        if self.state.results_selected > 0 {
+            self.state.results_selected -= 1;
+        }
+
+        // Ensure scroll keeps the selected row visible at the top
+        if self.state.results_selected < self.state.results_scroll {
+            self.state.results_scroll = self.state.results_selected;
+        }
     }
 
     fn results_total_lines(&self) -> usize {
@@ -191,8 +198,25 @@ impl App {
 
     fn results_down(&mut self) {
         let total = self.results_total_lines();
-        if self.state.results_scroll + 1 < total {
-            self.state.results_scroll += 1;
+        if self.state.results_selected + 1 < total {
+            self.state.results_selected += 1;
+        }
+
+        // Assume a fixed visible height of 4 rows for clamping purposes.
+        // This keeps the selected row within a small window while navigating.
+        let visible_rows = 4usize;
+        if self.state.results_selected >= self.state.results_scroll + visible_rows {
+            self.state.results_scroll = self
+                .state
+                .results_selected
+                .saturating_add(1)
+                .saturating_sub(visible_rows);
+        }
+
+        // Also ensure we don't scroll past the last line
+        let max_scroll = total.saturating_sub(visible_rows);
+        if self.state.results_scroll > max_scroll {
+            self.state.results_scroll = max_scroll;
         }
     }
 
@@ -489,6 +513,7 @@ mod tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+            results_selected: 0,
 
             tail_mode: false,
 

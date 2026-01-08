@@ -465,6 +465,7 @@ mod ui_tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+            results_selected: 0,
 
             tail_mode: false,
             status_message: None,

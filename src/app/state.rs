@@ -34,7 +34,7 @@ pub struct AppState {
     pub dots: usize,
     pub last_dots: Instant,
     pub results_scroll: usize,
-
+    pub results_selected: usize,
     pub tail_mode: bool,
 
     pub status_message: Option<String>,

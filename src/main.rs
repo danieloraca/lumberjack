@@ -68,6 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dots: 0,
         last_dots: Instant::now(),
         results_scroll: 0,
+        results_selected: 0,
 
         tail_mode: false,
         status_message: None,

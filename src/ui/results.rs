@@ -22,6 +22,8 @@ impl App {
             return;
         }
 
+        let results_focused = self.state.focus == crate::app::Focus::Results;
+
         // Flatten entries into raw lines (no manual wrapping).
         let mut raw_lines: Vec<String> = Vec::new();
         for entry in &self.state.lines {
@@ -50,6 +52,8 @@ impl App {
 
         for (i, line) in raw_lines[start..end].iter().enumerate() {
             let y = text_area.y + i as u16;
+            let global_idx = start + i;
+            let is_selected = results_focused && global_idx == self.state.results_selected;
 
             let expanded = if line.contains('\t') {
                 line.replace('\t', "    ")
@@ -79,10 +83,19 @@ impl App {
                 // Everything after the timestamp (including the space if present)
                 let rest: String = chars.collect();
 
-                let ts_style = theme.results_timestamp;
+                let ts_style = if is_selected {
+                    theme.results_selected
+                } else {
+                    theme.results_timestamp
+                };
 
                 let spans = if rest.is_empty() {
                     vec![Span::styled(ts, ts_style)]
+                } else if is_selected {
+                    vec![
+                        Span::styled(ts, ts_style),
+                        Span::styled(rest, theme.results_selected),
+                    ]
                 } else {
                     vec![Span::styled(ts, ts_style), Span::raw(rest)]
                 };
@@ -98,7 +111,11 @@ impl App {
                 );
             } else {
                 // No special timestamp; render the whole line normally.
-                Line::from(expanded.as_str()).render(
+                let mut line = Line::from(expanded.as_str());
+                if is_selected {
+                    line = line.style(theme.results_selected);
+                }
+                line.render(
                     Rect {
                         x: text_area.x,
                         y,
@@ -166,6 +183,7 @@ mod tests {
             dots: 0,
             last_dots: Instant::now(),
             results_scroll: 0,
+            results_selected: 0,
             tail_mode: false,
 
             status_message: None,

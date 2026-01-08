@@ -234,6 +234,7 @@ mod tests {
             dots: 0,
             last_dots: StdInstant::now(),
             results_scroll: 0,
+            results_selected: 0,
 
             tail_mode: false,
 
