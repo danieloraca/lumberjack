@@ -487,7 +487,7 @@ impl Widget for &App {
                 buf,
             );
 
-            Line::from("Enter/Space/Esc to close the popup | Y copy selected line")
+            Line::from("Enter/Space/Esc to close the popup | y copy")
                 .style(styles::default_gray(&theme).bg(popup_bg))
                 .render(
                     Rect {
