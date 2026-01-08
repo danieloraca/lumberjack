@@ -438,6 +438,19 @@ impl Widget for &App {
                 .style(styles::popup_block(&theme))
                 .border_style(styles::popup_border(&theme));
             let inner = block.inner(popup_area);
+
+            // Fully clear the inner area with the popup background so it is opaque.
+            let popup_bg = theme.popup_block.bg.unwrap_or(Color::Rgb(30, 30, 30));
+            for y in inner.y..inner.y + inner.height {
+                for x in inner.x..inner.x + inner.width {
+                    if let Some(cell) = buf.cell_mut((x, y)) {
+                        cell.set_bg(popup_bg);
+                        // Also clear any previous glyphs to a space for consistency.
+                        cell.set_symbol(" ");
+                    }
+                }
+            }
+
             block.render(popup_area, buf);
 
             // Resolve selected line index into the flattened results.
@@ -458,10 +471,13 @@ impl Widget for &App {
             let available_height = inner.height.saturating_sub(1);
             let scroll = self.state.results_detail_scroll as u16;
 
+            // Match the popup_block foreground/background for paragraph text.
+            let popup_fg = theme.popup_block.fg.unwrap_or(Color::White);
+
             let paragraph = ratatui::widgets::Paragraph::new(content)
                 .wrap(ratatui::widgets::Wrap { trim: false })
                 .scroll((scroll, 0))
-                .style(Style::default().fg(Color::White));
+                .style(Style::default().fg(popup_fg).bg(popup_bg));
 
             paragraph.render(
                 Rect {
@@ -473,9 +489,10 @@ impl Widget for &App {
                 buf,
             );
 
-            // Hint line at bottom
-            Line::from("Enter/Space/Esc to close")
-                .style(styles::default_gray(&theme))
+            // Hint line at bottom, with same background as popup_block so the
+            // popup interior remains opaque.
+            Line::from("Enter/Space/Esc to close the popup | y to copy selected line")
+                .style(styles::default_gray(&theme).bg(popup_bg))
                 .render(
                     Rect {
                         x: inner.x,
