@@ -23,6 +23,41 @@ impl App {
             }
         }
     }
+
+    /// Copy only the currently selected result line to the clipboard.
+    ///
+    /// This uses the same flattening logic as the results renderer and popup:
+    /// - Each entry in `state.lines` may contain embedded newlines.
+    /// - We split entries into individual lines and build a flat list.
+    /// - The index comes from `results_detail_selected_line` when present,
+    ///   otherwise it falls back to `results_selected`.
+    pub fn copy_selected_result_to_clipboard(&mut self) {
+        // Flatten entries into individual lines.
+        let mut flat: Vec<String> = Vec::new();
+        for entry in &self.state.lines {
+            for l in entry.lines() {
+                flat.push(l.to_string());
+            }
+        }
+
+        // Prefer the explicit detail selection (popup), otherwise use the
+        // currently selected results row.
+        let idx = match self.state.results_detail_selected_line {
+            Some(i) => i,
+            None => self.state.results_selected,
+        };
+
+        let Some(line) = flat.get(idx) else {
+            return;
+        };
+
+        if let Ok(mut clipboard) = Clipboard::new() {
+            if clipboard.set_text(line.clone()).is_ok() {
+                self.state.status_message = Some("Copied selected result line".to_string());
+                self.state.status_set_at = Some(Instant::now());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -81,6 +116,7 @@ mod tests {
             load_filter_selected: 0,
             results_detail_popup_open: false,
             results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {

@@ -81,6 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         load_filter_selected: 0,
         results_detail_popup_open: false,
         results_detail_selected_line: None,
+        results_detail_scroll: 0,
     };
 
     let mut app = App {

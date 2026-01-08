@@ -421,7 +421,8 @@ impl Widget for &App {
         if self.state.results_detail_popup_open {
             // Results detail popup showing the currently selected results line.
             let popup_width = 80u16.min(area.width);
-            let popup_height = 6u16.min(area.height);
+            // Allow a taller popup so we can show more wrapped content.
+            let popup_height = 12u16.min(area.height);
             let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
             let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
 
@@ -452,26 +453,25 @@ impl Widget for &App {
                 .cloned()
                 .unwrap_or_else(|| "<no line>".to_string());
 
-            // Render content (trim or pad to width).
-            let display = if content.len() > popup_width as usize {
-                let mut s = content.chars().take(popup_width as usize - 3).collect::<String>();
-                s.push_str("...");
-                s
-            } else {
-                content
-            };
+            // Use a Paragraph with word wrapping and a simple vertical scroll offset.
+            // We leave 1 row at the bottom for the hint line.
+            let available_height = inner.height.saturating_sub(1);
+            let scroll = self.state.results_detail_scroll as u16;
 
-            Line::from(display)
-                .style(Style::default().fg(Color::White))
-                .render(
-                    Rect {
-                        x: inner.x,
-                        y: inner.y,
-                        width: inner.width,
-                        height: 1,
-                    },
-                    buf,
-                );
+            let paragraph = ratatui::widgets::Paragraph::new(content)
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .scroll((scroll, 0))
+                .style(Style::default().fg(Color::White));
+
+            paragraph.render(
+                Rect {
+                    x: inner.x,
+                    y: inner.y,
+                    width: inner.width,
+                    height: available_height,
+                },
+                buf,
+            );
 
             // Hint line at bottom
             Line::from("Enter/Space/Esc to close")
@@ -547,6 +547,7 @@ mod ui_tests {
             load_filter_selected: 0,
             results_detail_popup_open: false,
             results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {

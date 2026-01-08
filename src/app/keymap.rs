@@ -27,6 +27,26 @@ impl App {
                     // Close the results detail popup on Esc, Enter, or Space.
                     self.state.results_detail_popup_open = false;
                     self.state.results_detail_selected_line = None;
+                    self.state.results_detail_scroll = 0;
+                }
+                KeyCode::Up => {
+                    // Scroll up within the detail popup (saturating at 0).
+                    self.state.results_detail_scroll =
+                        self.state.results_detail_scroll.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    // Scroll down within the detail popup; we let the Paragraph
+                    // handle clamping, so this can grow without precomputing max.
+                    self.state.results_detail_scroll =
+                        self.state.results_detail_scroll.saturating_add(1);
+                }
+                // While in the results detail popup, allow 'y' to copy only the
+                // selected result line to the clipboard, then close the popup.
+                KeyCode::Char('y') => {
+                    self.copy_selected_result_to_clipboard();
+                    self.state.results_detail_popup_open = false;
+                    self.state.results_detail_selected_line = None;
+                    self.state.results_detail_scroll = 0;
                 }
                 _ => {}
             }
@@ -134,6 +154,7 @@ impl App {
                     // Open results detail popup for the currently selected results line.
                     self.state.results_detail_popup_open = true;
                     self.state.results_detail_selected_line = Some(self.state.results_selected);
+                    self.state.results_detail_scroll = 0;
                 } else if self.state.focus == Focus::Filter
                     && self.state.filter_field == FilterField::Search
                     && !self.state.editing
@@ -164,10 +185,15 @@ impl App {
             KeyCode::Char(' ') if !self.state.editing && self.state.focus == Focus::Results => {
                 self.state.results_detail_popup_open = true;
                 self.state.results_detail_selected_line = Some(self.state.results_selected);
+                self.state.results_detail_scroll = 0;
             }
 
-            // Copy results to clipboard (Results pane, not editing)
-            KeyCode::Char('y') if !self.state.editing && self.state.focus == Focus::Results => {
+            // Copy results to clipboard (Results pane, not editing, and no popup)
+            KeyCode::Char('y')
+                if !self.state.editing
+                    && self.state.focus == Focus::Results
+                    && !self.state.results_detail_popup_open =>
+            {
                 self.copy_results_to_clipboard();
             }
 
@@ -307,6 +333,7 @@ mod tests {
             load_filter_selected: 0,
             results_detail_popup_open: false,
             results_detail_selected_line: None,
+            results_detail_scroll: 0,
         };
 
         App {
@@ -360,6 +387,40 @@ mod tests {
         // Third T: green -> dark
         app.handle_key_event(key(KeyCode::Char('T'))).unwrap();
         assert_eq!(app.state.theme_name, "dark");
+    }
+
+    #[test]
+    fn results_detail_popup_scrolls_with_up_down() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        // Very long line that will wrap across multiple rows in the popup.
+        app.state.lines = vec![
+            "This is a very long log line that should wrap across multiple lines in the result detail popup when rendered with a Paragraph widget."
+                .to_string(),
+        ];
+        app.state.results_selected = 0;
+
+        // Open popup
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+        assert_eq!(app.state.results_detail_scroll, 0);
+
+        // Scroll down a few steps
+        app.handle_key_event(key(KeyCode::Down)).unwrap();
+        app.handle_key_event(key(KeyCode::Down)).unwrap();
+        assert!(
+            app.state.results_detail_scroll >= 2,
+            "expected scroll to increase when pressing Down"
+        );
+
+        // Scroll up; should not go below 0
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        app.handle_key_event(key(KeyCode::Up)).unwrap();
+        assert_eq!(
+            app.state.results_detail_scroll, 0,
+            "expected scroll to saturate at 0 when scrolling up"
+        );
     }
 
     #[test]
@@ -428,7 +489,25 @@ mod tests {
 
         // Close with Esc
         app.handle_key_event(key(KeyCode::Esc)).unwrap();
+        assert_eq!(app.state.results_detail_popup_open, false);
+        assert_eq!(app.state.results_detail_selected_line, None);
+    }
+
+    #[test]
+    fn yank_in_results_detail_popup_copies_and_closes() {
+        let mut app = app_with_filter_query("");
+        app.state.focus = Focus::Results;
+        app.state.lines = vec!["line0".to_string(), "line1".to_string()];
+        app.state.results_selected = 1;
+
+        // Open popup
+        app.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(app.state.results_detail_popup_open);
+
+        // Press 'y' inside popup: should copy (reusing existing logic) and close
+        app.handle_key_event(key(KeyCode::Char('y'))).unwrap();
         assert!(!app.state.results_detail_popup_open);
         assert_eq!(app.state.results_detail_selected_line, None);
+        assert_eq!(app.state.results_detail_scroll, 0);
     }
 }
